@@ -17,12 +17,7 @@ CONTENTS                                                    *codecompanion-tikto
 ================================================================================
 1. Introduction                                      *codecompanion-tiktoken-introduction*
 
-A Neovim plugin that [brief description of what your plugin does].
-
-Key features:
-- Feature one
-- Feature two
-- Feature three
+A Neovim plugin that counts token in codecompanion using the tiktoken-rs library.
 
 ================================================================================
 2. Requirements                                      *codecompanion-tiktoken-requirements*
