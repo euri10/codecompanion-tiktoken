@@ -40,10 +40,7 @@ Optional dependencies:
 Using lazy.nvim:
 >lua
   {
-    "username/codecompanion-tiktoken",
-    dependencies = {
-      "nvim-lua/plenary.nvim", -- if needed
-    },
+    "euri10/codecompanion-tiktoken",
     config = function()
       require("codecompanion-tiktoken").setup({
         -- your configuration
@@ -55,8 +52,7 @@ Using lazy.nvim:
 Using packer.nvim:
 >lua
   use {
-    'username/codecompanion-tiktoken',
-    requires = { 'nvim-lua/plenary.nvim' }, -- if needed
+    'euri10/codecompanion-tiktoken',
     config = function()
       require('codecompanion-tiktoken').setup({
         -- your configuration
@@ -121,10 +117,10 @@ Default mappings (when using which-key):
 
 *codecompanion-tiktoken.setup()*
   Set up the plugin with the provided configuration.
-  
+
   Parameters:
     {opts} - (table, optional) Configuration table.
-  
+
   Example:
 >lua
   require("codecompanion-tiktoken").setup({
@@ -135,13 +131,13 @@ Default mappings (when using which-key):
 
 *codecompanion-tiktoken.some_function()*
   Description of what this function does.
-  
+
   Parameters:
     [List parameters here]
-  
+
   Returns:
     [Describe the return value]
-  
+
   Example:
 >lua
   require("codecompanion-tiktoken").some_function()
@@ -149,7 +145,7 @@ Default mappings (when using which-key):
 
 *codecompanion-tiktoken.toggle()*
   Toggle the plugin on/off.
-  
+
   Example:
 >lua
   require("codecompanion-tiktoken").toggle()
@@ -166,13 +162,13 @@ Solution: [Detailed solution]
 Issue 2: [Description of another common issue]
 Solution: [Detailed solution]
 
-For more help, submit an issue: https://github.com/username/codecompanion-tiktoken/issues
+For more help, submit an issue: https://github.com/euri10/codecompanion-tiktoken/issues
 
 ================================================================================
 9. Contributing                                      *codecompanion-tiktoken-contributing*
 
 Contributions are welcome! Please check the GitHub repository for details:
-https://github.com/username/codecompanion-tiktoken/blob/main/CONTRIBUTING.md
+https://github.com/euri10/codecompanion-tiktoken/blob/main/CONTRIBUTING.md
 
 ================================================================================
 10. License                                              *codecompanion-tiktoken-license*

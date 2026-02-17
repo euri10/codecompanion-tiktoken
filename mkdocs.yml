@@ -1,9 +1,9 @@
 site_name: Neovim Plugin Template
 site_description: A template for creating Neovim plugins with best practices and standardized structure
-site_url: https://greggh.github.io/neovim-plugin-template/
+site_url: https://euri10.github.io/codecompanion-tiktoken/
 
-repo_name: greggh/neovim-plugin-template
-repo_url: https://github.com/greggh/neovim-plugin-template
+repo_name: euri10/codecompanion-tiktoken
+repo_url: https://github.com/euri10/codecompanion-tiktoken
 
 theme:
   name: material

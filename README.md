@@ -2,14 +2,14 @@
 
 # codecompanion-tiktoken
 
-[![GitHub License](https://img.shields.io/github/license/greggh/neovim-plugin-template?style=flat-square)](https://github.com/greggh/neovim-plugin-template/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/greggh/neovim-plugin-template?style=flat-square)](https://github.com/greggh/neovim-plugin-template/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/greggh/neovim-plugin-template?style=flat-square)](https://github.com/greggh/neovim-plugin-template/issues)
-[![GitHub Last Commit](https://img.shields.io/github/last-commit/greggh/neovim-plugin-template?style=flat-square)](https://github.com/greggh/neovim-plugin-template/commits/main)
+[![GitHub License](https://img.shields.io/github/license/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/issues)
+[![GitHub Last Commit](https://img.shields.io/github/last-commit/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/commits/main)
 [![Neovim Version](https://img.shields.io/badge/Neovim-0.8%2B-blueviolet?style=flat-square&logo=neovim)](https://github.com/neovim/neovim)
-[![CI](https://img.shields.io/github/actions/workflow/status/greggh/neovim-plugin-template/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/greggh/neovim-plugin-template/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/Version-0.1.1-blue?style=flat-square)](https://github.com/greggh/neovim-plugin-template/releases/tag/v0.1.1)
-[![Discussions](https://img.shields.io/github/discussions/greggh/neovim-plugin-template?style=flat-square&logo=github)](https://github.com/greggh/neovim-plugin-template/discussions)
+[![CI](https://img.shields.io/github/actions/workflow/status/euri10/neovim-plugin-template/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/euri10/neovim-plugin-template/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/Version-0.1.1-blue?style=flat-square)](https://github.com/euri10/neovim-plugin-template/releases/tag/v0.1.1)
+[![Discussions](https://img.shields.io/github/discussions/euri10/neovim-plugin-template?style=flat-square&logo=github)](https://github.com/euri10/neovim-plugin-template/discussions)
 
 *allows codecompanion to count tokens using the tiktoken-rs library*
 
@@ -21,7 +21,7 @@
 [Development](#development) •
 [Contributing](#contributing) •
 [License](#license) •
-[Discussions](https://github.com/greggh/neovim-plugin-template/discussions)
+[Discussions](https://github.com/euri10/neovim-plugin-template/discussions)
 
 </div>
 
@@ -58,7 +58,7 @@ This repository provides a template for creating Neovim plugins with a standardi
 
 1. Use this template to create a new repository:
    ```bash
-   git clone https://github.com/greggh/neovim-plugin-template.git my-awesome-plugin
+   git clone https://github.com/euri10/neovim-plugin-template.git my-awesome-plugin
    cd my-awesome-plugin
    ```
 
@@ -75,7 +75,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "greggh/codecompanion-tiktoken",
+  "euri10/codecompanion-tiktoken",
   dependencies = {
     -- Add dependencies here
   },
@@ -91,7 +91,7 @@ Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
 use {
-  'greggh/codecompanion-tiktoken',
+  'euri10/codecompanion-tiktoken',
   requires = {
     -- Add dependencies here
   },
@@ -106,7 +106,7 @@ use {
 Using [vim-plug](https://github.com/junegunn/vim-plug):
 
 ```vim
-Plug 'greggh/codecompanion-tiktoken'
+Plug 'euri10/codecompanion-tiktoken'
 
 " In your init.vim after plug#end():
 lua require('codecompanion-tiktoken').setup({})
@@ -220,7 +220,7 @@ Lint code with Luacheck:
 luacheck .
 ```
 
-Both tools are integrated with the pre-commit hooks when using [hooks-util](https://github.com/greggh/hooks-util).
+Both tools are integrated with the pre-commit hooks when using [hooks-util](https://github.com/euri10/hooks-util).
 
 ## Contributing
 
@@ -248,11 +248,11 @@ This template is released under the MIT License. See the [LICENSE](LICENSE) file
 - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) - Testing framework
 - [StyLua](https://github.com/JohnnyMorganz/StyLua) - Lua formatter
 - [Luacheck](https://github.com/lunarmodules/luacheck) - Lua linter
-- [hooks-util](https://github.com/greggh/hooks-util) - Git hooks framework
+- [hooks-util](https://github.com/euri10/hooks-util) - Git hooks framework
 
 ## Discussions
 
-Have questions or ideas? Join the conversation in [GitHub Discussions](https://github.com/greggh/neovim-plugin-template/discussions).
+Have questions or ideas? Join the conversation in [GitHub Discussions](https://github.com/euri10/neovim-plugin-template/discussions).
 
 - **Questions**: For help with using or developing the plugin
 - **Ideas**: Suggest new features or improvements
@@ -262,5 +262,5 @@ Have questions or ideas? Join the conversation in [GitHub Discussions](https://g
 ---
 
 <div align="center">
-  <p>Made with ❤️ by <a href="https://github.com/greggh">greggh</a></p>
+  <p>Made with ❤️ by <a href="https://github.com/euri10">euri10</a></p>
 </div>

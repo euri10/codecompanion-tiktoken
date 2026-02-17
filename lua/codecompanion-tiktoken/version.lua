@@ -13,7 +13,7 @@ M.string = string.format("%d.%d.%d", M.major, M.minor, M.patch)
 
 -- Other version information
 M.min_neovim_version = "0.8.0"
-M.homepage = "https://github.com/greggh/plugin-name"
+M.homepage = "https://github.com/euri10/codecompanion-tiktoken"
 M.license = "MIT"
 
 -- Version check function

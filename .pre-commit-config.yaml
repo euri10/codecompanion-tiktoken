@@ -27,7 +27,7 @@ repos:
         language: system
         types: [lua]
         args: [-q]
-        
+
       - id: test
         name: test
         description: "Run Neovim tests"

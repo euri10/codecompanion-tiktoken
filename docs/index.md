@@ -1,8 +1,8 @@
 # Neovim Plugin Template
 
-[![GitHub License](https://img.shields.io/github/license/greggh/plugin-name?style=flat-square)](./LICENSE)
+[![GitHub License](https://img.shields.io/github/license/euri10/plugin-name?style=flat-square)](./LICENSE)
 [![Neovim Minimum Version](https://img.shields.io/badge/Neovim-0.8+-57A143?style=flat-square&logo=neovim)](https://neovim.io)
-[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/greggh/plugin-name/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/greggh/plugin-name/actions/workflows/ci.yml)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/euri10/plugin-name/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/euri10/plugin-name/actions/workflows/ci.yml)
 
 *A template for creating Neovim plugins with best practices and standardized structure*
 
@@ -41,30 +41,13 @@ This repository provides a template for creating Neovim plugins with a standardi
 - (Optional) StyLua for code formatting
 - (Optional) Luacheck for static analysis
 
-## Installation
-
-### Creating a New Plugin
-
-1. Use this template to create a new repository:
-   ```bash
-   git clone https://github.com/greggh/neovim-plugin-template.git my-awesome-plugin
-   cd my-awesome-plugin
-   ```
-
-2. Run the setup script to customize the template:
-   ```bash
-   ./scripts/setup.sh
-   ```
-
-3. Update the documentation files with your plugin-specific information
-
 ### Installing the Plugin (For Users)
 
 Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "greggh/plugin-name",
+  "euri10/codecompanion-tiktoken",
   dependencies = {
     -- Add dependencies here
   },
@@ -80,7 +63,7 @@ Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
 use {
-  'greggh/plugin-name',
+  'euri10/codecompanion-tiktoken',
   requires = {
     -- Add dependencies here
   },
@@ -196,7 +179,7 @@ This template is released under the MIT License. See the [LICENSE](LICENSE) file
 </p>
 ## Discussions
 
-Have questions or ideas? Join the conversation in [GitHub Discussions](https://github.com/greggh/plugin-name/discussions).
+Have questions or ideas? Join the conversation in [GitHub Discussions](https://github.com/euri10/codecompanion-tiktoken/discussions).
 
 - **Questions**: For help with using or developing the plugin
 - **Ideas**: Suggest new features or improvements

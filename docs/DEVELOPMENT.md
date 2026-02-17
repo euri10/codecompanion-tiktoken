@@ -12,7 +12,7 @@ This document provides instructions for setting up your development environment 
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/username/project-name.git
+git clone https://github.com/euri10/codecompanion-tiktoken.git
 cd project-name
 ```
 
