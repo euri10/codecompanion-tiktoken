@@ -69,6 +69,109 @@ Plug 'euri10/codecompanion-tiktoken'
 lua require('codecompanion-tiktoken').setup({})
 ```
 
+## Use as a codecompanion extension
+
+```lua
+extensions = {
+  token_counter = {
+    enabled = true,
+    opts = {},
+    callback = {
+      setup = function(ext_config)
+        -- Define a new action for chat keymaps
+        local count_tokens_action = {
+          modes = {
+            n = "gtt", -- Normal mode keymap: gtt = "get count tokens"
+          },
+          description = "Count Tokens",
+          callback = function(chat)
+            -- Make sure tiktoken is loaded
+            local ok, tiktoken = pcall(require, "tiktoken")
+            if not ok then
+              vim.notify("tiktoken module not found", vim.log.levels.ERROR)
+              return
+            end
+
+            if not chat or not chat.messages then
+              vim.notify("Chat messages not found", vim.log.levels.ERROR)
+              return
+            end
+
+            -- Pick model dynamically
+            local model_name = "GPT-4o"
+            if chat.adapter and chat.adapter.model and chat.adapter.model.name then
+              model_name = chat.adapter.model.name
+            end
+
+            -- Count total messages tokens
+            local total_tokens = tiktoken.count_messages(chat.messages, model_name)
+    local total_text = 0
+
+            -- Count total text in first message (optional)
+    for i, msg in ipairs(chat.messages) do
+      local text_tokens = tiktoken.count_text(msg.content, model_name)
+      vim.notify(
+        string.format("Message %d tokens: %d", i, text_tokens),
+        vim.log.levels.INFO,
+        { title = "Token Counter" }
+      )
+      total_text = total_text + text_tokens
+    end
+
+            vim.notify(
+              string.format("[%s] Total tokens: %d, all message tokens: %d", model_name, total_tokens,total_text),
+              vim.log.levels.INFO,
+              { title = "Token Counter" }
+            )
+          end,
+        }
+
+        -- Add the action to CodeCompanion chat keymaps
+        local chat_keymaps = require("codecompanion.config").interactions.chat.keymaps
+        chat_keymaps.count_tokens = count_tokens_action
+      end,
+
+      vim.api.nvim_create_autocmd("User", {
+        pattern = "CodeCompanionChatCreated",
+        callback = function(args)
+          local chat = require("codecompanion").buf_get_chat(args.data.bufnr)
+
+          chat:add_callback("on_before_submit", function(c, info)
+            if not c or not c.messages then
+              vim.notify("Error: Chat or messages not found in callback data", vim.log.levels.ERROR, { title = "CodeCompanion" })
+              return
+            end
+
+            local total_tokens = tiktoken.count_messages(c.messages, info.adapter.model.name)
+            local total_text = tiktoken.count_text(c.messages[1].content, info.adapter.model.name)
+
+            vim.notify(
+              string.format(
+                "Using tiktoken-rs with %s.\nAccurate total tokens: %d\nAccurate total text: %d",
+                info.adapter.model.name,
+                total_tokens,
+                total_text
+              ),
+              vim.log.levels.INFO,
+              { title = "CodeCompanion" }
+            )
+          end)
+        end,
+      }),
+      -- Optional: Export functions for other extensions or scripts
+      exports = {
+        get_tokens = function(chat)
+          local model_name = "GPT-4o"
+          if chat.adapter and chat.adapter.model and chat.adapter.model.name then
+            model_name = chat.adapter.model.name
+          end
+          return tiktoken.count_messages(chat.messages, model_name)
+        end,
+      },
+    },
+  },
+},
+```
 ## Configuration
 
 Default configuration:
