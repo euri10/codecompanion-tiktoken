@@ -49,7 +49,7 @@ fn model_constants(_model: &str) -> (usize, usize) {
 }
 
 #[mlua::lua_module]
-fn tiktoken(lua: &Lua) -> LuaResult<LuaTable<'_>> {
+fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
 
     // Count raw text tokens
@@ -73,27 +73,27 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable<'_>> {
 
                 total += tokens_per_message;
 
-                if let Ok(role) = msg.get::<_, String>("role") {
+                if let Ok(role) = msg.get::<String>("role") {
                     total += bpe.encode_with_special_tokens(&role).len();
                 }
 
-                if let Ok(content) = msg.get::<_, String>("content") {
+                if let Ok(content) = msg.get::<String>("content") {
                     total += bpe.encode_with_special_tokens(&content).len();
                 }
 
-                if let Ok(name) = msg.get::<_, String>("name") {
+                if let Ok(name) = msg.get::<String>("name") {
                     total += bpe.encode_with_special_tokens(&name).len();
                     total += tokens_per_name;
                 }
 
-                if let Ok(tool_calls) = msg.get::<_, LuaTable>("tool_calls") {
+                if let Ok(tool_calls) = msg.get::<LuaTable>("tool_calls") {
                     for tc in tool_calls.sequence_values::<LuaTable>() {
                         let tc = tc?;
-                        if let Ok(func) = tc.get::<_, LuaTable>("function") {
-                            if let Ok(name) = func.get::<_, String>("name") {
+                        if let Ok(func) = tc.get::<LuaTable>("function") {
+                            if let Ok(name) = func.get::<String>("name") {
                                 total += bpe.encode_with_special_tokens(&name).len();
                             }
-                            if let Ok(args) = func.get::<_, String>("arguments") {
+                            if let Ok(args) = func.get::<String>("arguments") {
                                 total += bpe.encode_with_special_tokens(&args).len();
                             }
                         }
