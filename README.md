@@ -2,14 +2,14 @@
 
 # codecompanion-tiktoken
 
-[![GitHub License](https://img.shields.io/github/license/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/issues)
-[![GitHub Last Commit](https://img.shields.io/github/last-commit/euri10/neovim-plugin-template?style=flat-square)](https://github.com/euri10/neovim-plugin-template/commits/main)
+[![GitHub License](https://img.shields.io/github/license/euri10/codecompanion-tiktoken?style=flat-square)](https://github.com/euri10/codecompanion-tiktoken/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/euri10/codecompanion-tiktoken?style=flat-square)](https://github.com/euri10/codecompanion-tiktoken/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/euri10/codecompanion-tiktoken?style=flat-square)](https://github.com/euri10/codecompanion-tiktoken/issues)
+[![GitHub Last Commit](https://img.shields.io/github/last-commit/euri10/codecompanion-tiktoken?style=flat-square)](https://github.com/euri10/codecompanion-tiktoken/commits/main)
 [![Neovim Version](https://img.shields.io/badge/Neovim-0.8%2B-blueviolet?style=flat-square&logo=neovim)](https://github.com/neovim/neovim)
-[![CI](https://img.shields.io/github/actions/workflow/status/euri10/neovim-plugin-template/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/euri10/neovim-plugin-template/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/Version-0.1.1-blue?style=flat-square)](https://github.com/euri10/neovim-plugin-template/releases/tag/v0.1.1)
-[![Discussions](https://img.shields.io/github/discussions/euri10/neovim-plugin-template?style=flat-square&logo=github)](https://github.com/euri10/neovim-plugin-template/discussions)
+[![CI](https://img.shields.io/github/actions/workflow/status/euri10/codecompanion-tiktoken/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/euri10/codecompanion-tiktoken/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/Version-0.1.1-blue?style=flat-square)](https://github.com/euri10/codecompanion-tiktoken/releases/tag/v0.1.1)
+[![Discussions](https://img.shields.io/github/discussions/euri10/codecompanion-tiktoken?style=flat-square&logo=github)](https://github.com/euri10/codecompanion-tiktoken/discussions)
 
 *allows codecompanion to count tokens using the tiktoken-rs library*
 
@@ -21,7 +21,7 @@
 [Development](#development) •
 [Contributing](#contributing) •
 [License](#license) •
-[Discussions](https://github.com/euri10/neovim-plugin-template/discussions)
+[Discussions](https://github.com/euri10/codecompanion-tiktoken/discussions)
 
 </div>
 
@@ -52,22 +52,6 @@ This repository provides a template for creating Neovim plugins with a standardi
 - (Optional) StyLua for code formatting
 - (Optional) Luacheck for static analysis
 
-## Installation
-
-### Creating a New Plugin
-
-1. Use this template to create a new repository:
-   ```bash
-   git clone https://github.com/euri10/neovim-plugin-template.git my-awesome-plugin
-   cd my-awesome-plugin
-   ```
-
-2. Run the setup script to customize the template:
-   ```bash
-   ./scripts/setup.sh
-   ```
-
-3. Update the documentation files with your plugin-specific information
 
 ### Installing the Plugin (For Users)
 
@@ -252,7 +236,7 @@ This template is released under the MIT License. See the [LICENSE](LICENSE) file
 
 ## Discussions
 
-Have questions or ideas? Join the conversation in [GitHub Discussions](https://github.com/euri10/neovim-plugin-template/discussions).
+Have questions or ideas? Join the conversation in [GitHub Discussions](https://github.com/euri10/codecompanion-tiktoken/discussions).
 
 - **Questions**: For help with using or developing the plugin
 - **Ideas**: Suggest new features or improvements
