@@ -25,34 +25,6 @@
 
 </div>
 
-## Overview
-
-This repository provides a template for creating Neovim plugins with a standardized structure and best practices. It includes:
-
-- Complete plugin structure with entry points
-- Documentation templates
-- Test framework setup
-- Code quality tools integration
-- GitHub workflows for CI/CD
-- Community health files
-
-## Features
-
-- 📋 **Complete Structure** - All necessary files and directories for a Neovim plugin
-- 📚 **Documentation** - Templates for help docs and README
-- 🧪 **Testing** - Plenary-based test setup with minimal configuration
-- ✨ **Code Quality** - StyLua and Luacheck configuration
-- 🔄 **CI/CD** - GitHub Actions workflows for testing, linting and releases
-- 👥 **Community** - Templates for issues, PRs, and contributing guidelines
-
-## Requirements
-
-- Neovim >= 0.8.0
-- Git for version control
-- (Optional) StyLua for code formatting
-- (Optional) Luacheck for static analysis
-
-
 ### Installing the Plugin (For Users)
 
 Using [lazy.nvim](https://github.com/folke/lazy.nvim):
@@ -60,6 +32,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   "euri10/codecompanion-tiktoken",
+  build = "make build"
   dependencies = {
     -- Add dependencies here
   },
@@ -95,20 +68,6 @@ Plug 'euri10/codecompanion-tiktoken'
 " In your init.vim after plug#end():
 lua require('codecompanion-tiktoken').setup({})
 ```
-
-## Usage
-
-After installation, you can use the plugin with the following commands:
-
-```vim
-:PluginNameCommand    " Execute the plugin's main function
-:PluginNameToggle     " Toggle the plugin on/off
-```
-
-Key mappings (if using which-key):
-
-- `<leader>pf` - Execute the plugin's main function
-- `<leader>pt` - Toggle the plugin on/off
 
 ## Configuration
 
@@ -244,7 +203,3 @@ Have questions or ideas? Join the conversation in [GitHub Discussions](https://g
 - **General**: For any other topics related to this plugin
 
 ---
-
-<div align="center">
-  <p>Made with ❤️ by <a href="https://github.com/euri10">euri10</a></p>
-</div>

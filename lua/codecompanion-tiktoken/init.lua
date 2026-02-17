@@ -88,25 +88,25 @@ M.setup_keymaps = function()
 
   -- Register with which-key if available
   local ok, wk = pcall(require, "which-key")
-  if ok then
-    wk.register({
-      ["<leader>p"] = {
-        name = "+codecompanion-tiktoken",
-        f = {
-          function()
-            M.some_function()
-          end,
-          "Plugin Function",
-        },
-        t = {
-          function()
-            M.toggle()
-          end,
-          "Toggle Plugin",
-        },
-      },
-    })
-  end
+  -- if ok then
+  --   wk.register({
+  --     ["<leader>p"] = {
+  --       name = "+codecompanion-tiktoken",
+  --       f = {
+  --         function()
+  --           M.some_function()
+  --         end,
+  --         "Plugin Function",
+  --       },
+  --       t = {
+  --         function()
+  --           M.toggle()
+  --         end,
+  --         "Toggle Plugin",
+  --       },
+  --     },
+  --   })
+  -- end
 end
 
 ---Example function that your plugin provides

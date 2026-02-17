@@ -7,18 +7,6 @@ if vim.fn.has("nvim-0.8") == 0 then
   return
 end
 
--- Create user commands for the plugin
-vim.api.nvim_create_user_command("PluginNameCommand", function()
-  require("codecompanion-tiktoken").some_function()
-end, {
-  desc = "Execute plugin's main function",
-})
-
-vim.api.nvim_create_user_command("PluginNameToggle", function()
-  require("codecompanion-tiktoken").toggle()
-end, {
-  desc = "Toggle plugin on/off",
-})
 
 -- Auto-setup for lazy loading
 -- Uncomment if needed
