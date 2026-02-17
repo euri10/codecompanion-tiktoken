@@ -1,31 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/CONTRIBUTING/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/CONTRIBUTING/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/DEVELOPMENT/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/DEVELOPMENT/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/FEATURES/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/FEATURES/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/GITHUB_BEST_PRACTICES/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/GITHUB_BEST_PRACTICES/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/IMPLEMENTATION_PLAN/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/IMPLEMENTATION_PLAN/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
     <url>
-         <loc>https://greggh.github.io/neovim-plugin-template/INSTALLATION/</loc>
+         <loc>https://euri10.github.io/codecompanion-tiktoken/INSTALLATION/</loc>
          <lastmod>2026-02-17</lastmod>
     </url>
 </urlset>
