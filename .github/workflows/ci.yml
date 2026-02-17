@@ -43,18 +43,18 @@ jobs:
       
       - name: Fix Linting Issues
         run: |
-          # Fix known linting issues in plugin-name files
-          if [ -f lua/plugin-name/init.lua ]; then
+          # Fix known linting issues in codecompanion-tiktoken files
+          if [ -f lua/codecompanion-tiktoken/init.lua ]; then
             # Fix unused variable warning
-            sed -i 's/local opts = { noremap = true, silent = true }/local opts = { noremap = true, silent = true } -- Used in keymap functions/g' lua/plugin-name/init.lua
+            sed -i 's/local opts = { noremap = true, silent = true }/local opts = { noremap = true, silent = true } -- Used in keymap functions/g' lua/codecompanion-tiktoken/init.lua
             # Remove trailing whitespace
-            sed -i 's/ *$//' lua/plugin-name/init.lua
+            sed -i 's/ *$//' lua/codecompanion-tiktoken/init.lua
           fi
           
-          if [ -f lua/plugin-name/version.lua ]; then
+          if [ -f lua/codecompanion-tiktoken/version.lua ]; then
             # Remove empty lines and trailing whitespace
-            sed -i '/^$/d' lua/plugin-name/version.lua
-            sed -i 's/ *$//' lua/plugin-name/version.lua
+            sed -i '/^$/d' lua/codecompanion-tiktoken/version.lua
+            sed -i 's/ *$//' lua/codecompanion-tiktoken/version.lua
           fi
       
       - name: Lint with Luacheck

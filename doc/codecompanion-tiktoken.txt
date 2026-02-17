@@ -1,21 +1,21 @@
-*plugin-name.txt*  Description of your plugin functionality
+*codecompanion-tiktoken.txt*  allows codecompanion to count tokens using the tiktoken-rs library
 
 ================================================================================
-CONTENTS                                                    *plugin-name-contents*
+CONTENTS                                                    *codecompanion-tiktoken-contents*
 
-1. Introduction ................ |plugin-name-introduction|
-2. Requirements ................ |plugin-name-requirements|
-3. Installation ................ |plugin-name-installation|
-4. Configuration ............... |plugin-name-configuration|
-5. Commands .................... |plugin-name-commands|
-6. Mappings .................... |plugin-name-mappings|
-7. API Functions ............... |plugin-name-api|
-8. Troubleshooting ............. |plugin-name-troubleshooting|
-9. Contributing ................ |plugin-name-contributing|
-10. License .................... |plugin-name-license|
+1. Introduction ................ |codecompanion-tiktoken-introduction|
+2. Requirements ................ |codecompanion-tiktoken-requirements|
+3. Installation ................ |codecompanion-tiktoken-installation|
+4. Configuration ............... |codecompanion-tiktoken-configuration|
+5. Commands .................... |codecompanion-tiktoken-commands|
+6. Mappings .................... |codecompanion-tiktoken-mappings|
+7. API Functions ............... |codecompanion-tiktoken-api|
+8. Troubleshooting ............. |codecompanion-tiktoken-troubleshooting|
+9. Contributing ................ |codecompanion-tiktoken-contributing|
+10. License .................... |codecompanion-tiktoken-license|
 
 ================================================================================
-1. Introduction                                      *plugin-name-introduction*
+1. Introduction                                      *codecompanion-tiktoken-introduction*
 
 A Neovim plugin that [brief description of what your plugin does].
 
@@ -25,7 +25,7 @@ Key features:
 - Feature three
 
 ================================================================================
-2. Requirements                                      *plugin-name-requirements*
+2. Requirements                                      *codecompanion-tiktoken-requirements*
 
 - Neovim >= 0.8.0
 - [Any other dependencies]
@@ -35,17 +35,17 @@ Optional dependencies:
 - which-key.nvim (for keymap integration)
 
 ================================================================================
-3. Installation                                      *plugin-name-installation*
+3. Installation                                      *codecompanion-tiktoken-installation*
 
 Using lazy.nvim:
 >lua
   {
-    "username/plugin-name",
+    "username/codecompanion-tiktoken",
     dependencies = {
       "nvim-lua/plenary.nvim", -- if needed
     },
     config = function()
-      require("plugin-name").setup({
+      require("codecompanion-tiktoken").setup({
         -- your configuration
       })
     end
@@ -55,10 +55,10 @@ Using lazy.nvim:
 Using packer.nvim:
 >lua
   use {
-    'username/plugin-name',
+    'username/codecompanion-tiktoken',
     requires = { 'nvim-lua/plenary.nvim' }, -- if needed
     config = function()
-      require('plugin-name').setup({
+      require('codecompanion-tiktoken').setup({
         -- your configuration
       })
     end
@@ -66,11 +66,11 @@ Using packer.nvim:
 <
 
 ================================================================================
-4. Configuration                                    *plugin-name-configuration*
+4. Configuration                                    *codecompanion-tiktoken-configuration*
 
 The default configuration:
 >lua
-  require("plugin-name").setup({
+  require("codecompanion-tiktoken").setup({
     enabled = true,
     debug = false,
     -- Add other default values
@@ -92,7 +92,7 @@ debug~
 [Add other configuration options here]
 
 ================================================================================
-5. Commands                                              *plugin-name-commands*
+5. Commands                                              *codecompanion-tiktoken-commands*
 
 The plugin provides the following commands:
 
@@ -103,7 +103,7 @@ The plugin provides the following commands:
   Toggles the plugin on/off.
 
 ================================================================================
-6. Mappings                                              *plugin-name-mappings*
+6. Mappings                                              *codecompanion-tiktoken-mappings*
 
 Default mappings (when using which-key):
 
@@ -117,9 +117,9 @@ Default mappings (when using which-key):
   Toggle plugin on/off
 
 ================================================================================
-7. API Functions                                             *plugin-name-api*
+7. API Functions                                             *codecompanion-tiktoken-api*
 
-*plugin-name.setup()*
+*codecompanion-tiktoken.setup()*
   Set up the plugin with the provided configuration.
   
   Parameters:
@@ -127,13 +127,13 @@ Default mappings (when using which-key):
   
   Example:
 >lua
-  require("plugin-name").setup({
+  require("codecompanion-tiktoken").setup({
     enabled = true,
     debug = true,
   })
 <
 
-*plugin-name.some_function()*
+*codecompanion-tiktoken.some_function()*
   Description of what this function does.
   
   Parameters:
@@ -144,19 +144,19 @@ Default mappings (when using which-key):
   
   Example:
 >lua
-  require("plugin-name").some_function()
+  require("codecompanion-tiktoken").some_function()
 <
 
-*plugin-name.toggle()*
+*codecompanion-tiktoken.toggle()*
   Toggle the plugin on/off.
   
   Example:
 >lua
-  require("plugin-name").toggle()
+  require("codecompanion-tiktoken").toggle()
 <
 
 ================================================================================
-8. Troubleshooting                                *plugin-name-troubleshooting*
+8. Troubleshooting                                *codecompanion-tiktoken-troubleshooting*
 
 Common issues:
 
@@ -166,16 +166,16 @@ Solution: [Detailed solution]
 Issue 2: [Description of another common issue]
 Solution: [Detailed solution]
 
-For more help, submit an issue: https://github.com/username/plugin-name/issues
+For more help, submit an issue: https://github.com/username/codecompanion-tiktoken/issues
 
 ================================================================================
-9. Contributing                                      *plugin-name-contributing*
+9. Contributing                                      *codecompanion-tiktoken-contributing*
 
 Contributions are welcome! Please check the GitHub repository for details:
-https://github.com/username/plugin-name/blob/main/CONTRIBUTING.md
+https://github.com/username/codecompanion-tiktoken/blob/main/CONTRIBUTING.md
 
 ================================================================================
-10. License                                              *plugin-name-license*
+10. License                                              *codecompanion-tiktoken-license*
 
 This plugin is licensed under the MIT License.
 See the LICENSE file for more details.

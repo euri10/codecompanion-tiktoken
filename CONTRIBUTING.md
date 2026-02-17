@@ -4,7 +4,7 @@ Thank you for considering contributing to this project! We welcome contributions
 
 ## Code of Conduct
 
-This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [maintainer-email].
+This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to benoit.barthelet@gmail.com.
 
 ## Getting Started
 

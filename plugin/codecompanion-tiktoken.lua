@@ -1,4 +1,4 @@
--- plugin/plugin-name.lua
+-- plugin/codecompanion-tiktoken.lua
 -- Plugin loader and command definitions
 
 -- Define plugin commands
@@ -9,13 +9,13 @@ end
 
 -- Create user commands for the plugin
 vim.api.nvim_create_user_command("PluginNameCommand", function()
-  require("plugin-name").some_function()
+  require("codecompanion-tiktoken").some_function()
 end, {
   desc = "Execute plugin's main function",
 })
 
 vim.api.nvim_create_user_command("PluginNameToggle", function()
-  require("plugin-name").toggle()
+  require("codecompanion-tiktoken").toggle()
 end, {
   desc = "Toggle plugin on/off",
 })
@@ -23,5 +23,5 @@ end, {
 -- Auto-setup for lazy loading
 -- Uncomment if needed
 -- if vim.fn.has("vim_starting") == 1 then
---   vim.cmd([[autocmd VimEnter * ++once lua require("plugin-name").setup()]])
+--   vim.cmd([[autocmd VimEnter * ++once lua require("codecompanion-tiktoken").setup()]])
 -- end

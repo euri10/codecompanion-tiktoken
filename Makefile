@@ -52,3 +52,10 @@ hooks:
 		git submodule add https://github.com/username/hooks-util.git .hooks-util; \
 		cd .hooks-util && ./install.sh -c; \
 	fi
+
+build:
+	./scripts/build.sh
+
+dev:
+	cargo build
+
