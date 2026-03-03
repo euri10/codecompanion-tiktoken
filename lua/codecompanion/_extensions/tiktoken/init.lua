@@ -6,6 +6,54 @@ local Extension = {}
 -- State table to track previous token counts per chat
 local prev_token_state = {}
 
+-- Logging configuration
+local LOG_ENABLED = false
+local LOG_FILE = vim.fn.stdpath("data") .. "/codecompanion/tiktoken.log"
+
+---Log token delta information
+---@param chat_id number The chat identifier
+---@param breakdown table Current token breakdown
+---@param delta_breakdown table Token deltas
+---@param total_tokens number Total token count
+---@param total_delta number Total delta
+local function log_token_delta(chat_id, breakdown, delta_breakdown, total_tokens, total_delta)
+  if not LOG_ENABLED then
+    return
+  end
+
+  local timestamp = os.date("%Y-%m-%d %H:%M:%S")
+  local log_entry = string.format(
+    "[%s] Chat %d: Total=%d (Δ=%d) | System=%d (Δ=%d), Chat=%d (Δ=%d), Tools=%d (Δ=%d), Files=%d (Δ=%d), User=%d (Δ=%d)",
+    timestamp,
+    chat_id,
+    total_tokens,
+    total_delta,
+    breakdown.system or 0,
+    delta_breakdown.system or 0,
+    breakdown.chat or 0,
+    delta_breakdown.chat or 0,
+    breakdown.tools or 0,
+    delta_breakdown.tools or 0,
+    breakdown.files or 0,
+    delta_breakdown.files or 0,
+    breakdown.user or 0,
+    delta_breakdown.user or 0
+  )
+
+  -- Ensure log directory exists
+  local log_dir = vim.fn.fnamemodify(LOG_FILE, ":h")
+  if not vim.loop.fs_stat(log_dir) then
+    vim.fn.mkdir(log_dir, "p")
+  end
+
+  -- Append to log file
+  local file = io.open(LOG_FILE, "a")
+  if file then
+    file:write(log_entry .. "\n")
+    file:close()
+  end
+end
+
 ---@class CodeCompanion.TokenContext
 ---@field system string System prompt content
 ---@field chat string Chat history content
@@ -107,6 +155,9 @@ function Extension.setup(opts)
         end
         local total_delta = total_tokens - (prev.total or 0)
         prev_token_state[chat_id] = { breakdown = vim.deepcopy(token_breakdown), total = total_tokens }
+
+        -- Log token delta if enabled
+        log_token_delta(chat_id, token_breakdown, delta_breakdown, total_tokens, total_delta)
 
         -- Notify UI only (no floating window)
         local lines = { "Token Intelligence" }
