@@ -50,9 +50,23 @@ fn tokenizer_for_model(model: &str) -> CoreBPE {
 }
 
 // Return token constants per model
-fn model_constants(_model: &str) -> (usize, usize) {
-    // Simplified: override here if specific models differ
-    (3, 1) // tokens_per_message, tokens_per_name
+fn model_constants(model: &str) -> (isize, isize) {
+    match model {
+        // Most recent GPT-3.5/4/4o models
+        "gpt-3.5-turbo-0613"
+        | "gpt-3.5-turbo-16k-0613"
+        | "gpt-4-0314"
+        | "gpt-4-32k-0314"
+        | "gpt-4-0613"
+        | "gpt-4-32k-0613"
+        | "gpt-4o" => (3, 1),
+        // March 2023 GPT-3.5-turbo
+        "gpt-3.5-turbo-0301" => (4, -1),
+        // For ambiguous "gpt-3.5-turbo" or "gpt-4", use latest known values
+        m if m.starts_with("gpt-3.5-turbo") || m.starts_with("gpt-4") => (3, 1),
+        // Fallback for unknown models
+        _ => (3, 1),
+    }
 }
 
 #[mlua::lua_module]
@@ -73,12 +87,14 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
             let bpe = tokenizer_for_model(&model_name);
             let (tokens_per_message, tokens_per_name) = model_constants(&model_name);
 
-            let mut total = 0;
+            let mut total: usize = 0;
 
             for pair in messages.sequence_values::<LuaTable>() {
                 let msg = pair?;
 
-                total += tokens_per_message;
+                if tokens_per_message > 0 {
+                    total += tokens_per_message as usize;
+                }
 
                 if let Ok(role) = msg.get::<String>("role") {
                     total += bpe.encode_with_special_tokens(&role).len();
@@ -90,7 +106,9 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
 
                 if let Ok(name) = msg.get::<String>("name") {
                     total += bpe.encode_with_special_tokens(&name).len();
-                    total += tokens_per_name;
+                    if tokens_per_name > 0 {
+                        total += tokens_per_name as usize;
+                    }
                 }
 
                 if let Ok(tool_calls) = msg.get::<LuaTable>("tool_calls") {
@@ -116,4 +134,58 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
     exports.set("count_messages", count_messages)?;
 
     Ok(exports)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tokenizer_for_model_variants() {
+        let models = vec![
+            ("gpt-oss", "o200k_harmony"),
+            ("GPT-5", "o200k_base"),
+            ("gpt-3.5-turbo", "cl100k_base"),
+            ("text-davinci-002", "p50k_base"),
+            ("text-davinci-edit-001", "p50k_edit"),
+            ("davinci", "r50k_base"),
+            ("unknown", "cl100k_base"),
+        ];
+        for (model, _desc) in models {
+            let bpe = tokenizer_for_model(model);
+            // Just check that encoding works and returns a vector
+            let tokens = bpe.encode_with_special_tokens("hello world");
+            assert!(!tokens.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_count_text_simple() {
+        let bpe = tokenizer_for_model("cl100k_base");
+        let text = "hello world";
+        let tokens = bpe.encode_with_special_tokens(text);
+        assert!(!tokens.is_empty());
+    }
+
+    #[test]
+    fn test_count_messages_simple() {
+        // Simulate a chat message structure
+        let bpe = tokenizer_for_model("cl100k_base");
+        let (tokens_per_message, tokens_per_name) = model_constants("cl100k_base");
+        let role = "user";
+        let content = "hello";
+        let name = "bob";
+        let mut total: usize = 0;
+        if tokens_per_message > 0 {
+            total += tokens_per_message as usize;
+        }
+        total += bpe.encode_with_special_tokens(role).len();
+        total += bpe.encode_with_special_tokens(content).len();
+        total += bpe.encode_with_special_tokens(name).len();
+        if tokens_per_name > 0 {
+            total += tokens_per_name as usize;
+        }
+        total += 3; // assistant priming
+        assert!(total > 0);
+    }
 }

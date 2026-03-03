@@ -57,7 +57,7 @@ function Extension.setup(opts)
           total_estimated_tokens = total_estimated_tokens + estimated
         end
         -- Notify UI only (no floating window)
-        local lines = { "Token Intelligence" }
+        local lines = {}
         table.insert(lines, "-------------------------------")
 	table.insert(lines, string.format("----- %s -----", event))
         table.insert(lines, string.format("Total: %d | Estimated: %d", total_tokens, total_estimated_tokens))
