@@ -2,10 +2,11 @@ use mlua::prelude::*;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tiktoken_rs::{CoreBPE, cl100k_base, o200k_base, o200k_harmony, p50k_base, p50k_edit, r50k_base};
+use tiktoken_rs::{
+    CoreBPE, cl100k_base, o200k_base, o200k_harmony, p50k_base, p50k_edit, r50k_base,
+};
 // Cache tokenizers for performance
-static CACHE: Lazy<Mutex<HashMap<String, CoreBPE>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static CACHE: Lazy<Mutex<HashMap<String, CoreBPE>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 // Map model name → BPE initializer
 fn tokenizer_for_model(model: &str) -> CoreBPE {
@@ -17,13 +18,19 @@ fn tokenizer_for_model(model: &str) -> CoreBPE {
 
     let bpe = match model {
         // o200k_harmony
-        "gpt-oss" | "gpt-oss-20b" | "gpt-oss-120b" => o200k_harmony().expect("o200k_harmony failed"),
+        "gpt-oss" | "gpt-oss-20b" | "gpt-oss-120b" => {
+            o200k_harmony().expect("o200k_harmony failed")
+        }
 
         // o200k_base
-        "GPT-5" | "GPT-4.1" | "GPT-4o" | "o4" | "o3" | "o1" => o200k_base().expect("o200k_base failed"),
+        "GPT-5" | "GPT-4.1" | "GPT-4o" | "o4" | "o3" | "o1" => {
+            o200k_base().expect("o200k_base failed")
+        }
 
         // cl100k_base
-        "gpt-3.5-turbo" | "gpt-4" | "text-embedding-ada-002" => cl100k_base().expect("cl100k_base failed"),
+        "gpt-3.5-turbo" | "gpt-4" | "text-embedding-ada-002" => {
+            cl100k_base().expect("cl100k_base failed")
+        }
 
         // p50k_base
         "text-davinci-002" | "text-davinci-003" => p50k_base().expect("p50k_base failed"),
@@ -60,8 +67,8 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
     })?;
 
     // Count chat messages
-    let count_messages = lua.create_function(
-        |_, (messages, model): (LuaTable, Option<String>)| {
+    let count_messages =
+        lua.create_function(|_, (messages, model): (LuaTable, Option<String>)| {
             let model_name = model.unwrap_or_else(|| "cl100k_base".to_string());
             let bpe = tokenizer_for_model(&model_name);
             let (tokens_per_message, tokens_per_name) = model_constants(&model_name);
@@ -103,12 +110,10 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
 
             total += 3; // assistant priming
             Ok(total)
-        },
-    )?;
+        })?;
 
     exports.set("count_text", count_text)?;
     exports.set("count_messages", count_messages)?;
 
     Ok(exports)
 }
-
