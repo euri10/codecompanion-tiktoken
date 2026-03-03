@@ -107,6 +107,13 @@ function Extension.setup(opts)
   -- Initialize extension
   -- Add actions, keymaps etc.
   local tiktoken = require("tiktoken")
+
+  -- Debug: verify Rust module loaded correctly
+  if not tiktoken.count_text then
+    vim.notify("Error: tiktoken Rust module not loaded correctly", vim.log.levels.ERROR)
+    return
+  end
+
   local relevant_events = {
     "CodeCompanionChatCreated",
     "CodeCompanionChatOpened",
@@ -126,6 +133,19 @@ function Extension.setup(opts)
         end
 
         local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
+
+        -- Debug: log token counting call
+        local debug_output = string.format(
+          "Counting tokens for model: %s | Sections: system=%d, chat=%d, tools=%d, files=%d, user=%d",
+          model_name,
+          #context.system,
+          #context.chat,
+          #context.tools,
+          #context.files,
+          #context.user
+        )
+        -- Uncomment to enable debug logging:
+        -- vim.notify(debug_output, vim.log.levels.INFO, { title = "Token Debug" })
 
         -- Build tagged context sections
         local context = TokenContext.new(chat)
