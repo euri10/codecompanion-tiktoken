@@ -38,8 +38,9 @@ M.setup = function(opts)
   local tiktoken = require("tiktoken")
 
   vim.api.nvim_create_autocmd("User", {
-    pattern = "CodeCompanionChatCreated",
+    pattern = "CodeCompanionToolApprovalRequested",
     callback = function(args)
+      vim.notify(vim.inspect(args), vim.log.levels.DEBUG, { title = "CodeCompanion Tool Approval" })
       local chat = require("codecompanion").buf_get_chat(args.data.bufnr)
 
       chat:add_callback("on_before_submit", function(c, info)
@@ -52,19 +53,41 @@ M.setup = function(opts)
           return
         end
 
-        local total_tokens = tiktoken.count_messages(c.messages, info.adapter.model.name)
-        local total_text = tiktoken.count_text(c.messages[1].content, info.adapter.model.name)
+        local model_name = info.adapter.model.name
+        -- Example: Extract sections (adapt as needed for your data structures)
+        local system_prompt = c.system_prompt or ""
+        local chat_history = table.concat(vim.tbl_map(function(m)
+          return (m.role ~= "system" and m.content) or ""
+        end, c.messages), "\n")
+        local tool_schemas = c.tool_schemas or ""
+        local retrieved_files = c.retrieved_files or ""
+        local user_message = c.messages[#c.messages] and c.messages[#c.messages].content or ""
 
-        vim.notify(
-          string.format(
-            "Using tiktoken-rs with %s.\nAccurate total tokens: %d\nAccurate total text: %d",
-            info.adapter.model.name,
-            total_tokens,
-            total_text
-          ),
-          vim.log.levels.INFO,
-          { title = "CodeCompanion" }
-        )
+        local context_sections = {
+          ["System prompt"] = system_prompt,
+          ["Chat history"] = chat_history,
+          ["Tool schemas"] = tool_schemas,
+          ["Retrieved files"] = retrieved_files,
+          ["Current message"] = user_message,
+        }
+
+        local token_breakdown = {}
+        local total_tokens = 0
+        for name, text in pairs(context_sections) do
+          local count = tiktoken.count_text(text, model_name)
+          token_breakdown[name] = count
+          total_tokens = total_tokens + count
+        end
+
+        -- Format breakdown for display
+        local lines = { "Context Breakdown:" }
+        for name, count in pairs(token_breakdown) do
+          table.insert(lines, string.format("• %s: %d tokens", name, count))
+        end
+        table.insert(lines, "-------------------------------")
+        table.insert(lines, string.format("Total: %d tokens", total_tokens))
+
+        vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
       end)
     end,
   })
