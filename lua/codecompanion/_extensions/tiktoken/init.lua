@@ -70,7 +70,7 @@ function Extension.setup(opts)
         local total_delta = total_tokens - (prev.total or 0)
         prev_token_state[chat_id] = { breakdown = vim.deepcopy(token_breakdown), total = total_tokens }
 
-        -- Floating window UI
+        -- Notify UI only (no floating window)
         local lines = { "Token Intelligence" }
         table.insert(lines, "-------------------------------")
         for name, count in pairs(token_breakdown) do
@@ -81,26 +81,8 @@ function Extension.setup(opts)
         table.insert(lines, "-------------------------------")
         table.insert(lines, string.format("Total: %d (%+d)", total_tokens, total_delta))
 
-        -- Create floating window
-        local buf = vim.api.nvim_create_buf(false, true)
-        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-        local width = 40
-        local height = #lines
-        local opts = {
-          relative = "editor",
-          width = width,
-          height = height,
-          row = 2,
-          col = vim.o.columns - width - 2,
-          style = "minimal",
-          border = "rounded",
-        }
-        local win = vim.api.nvim_open_win(buf, false, opts)
-        vim.defer_fn(function()
-          if vim.api.nvim_win_is_valid(win) then
-            vim.api.nvim_win_close(win, true)
-          end
-        end, 3500)
+        vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
+
 
       end,
     })
