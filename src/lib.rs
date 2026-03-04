@@ -130,6 +130,7 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
             Ok(total)
         })?;
 
+    
     exports.set("count_text", count_text)?;
     exports.set("count_messages", count_messages)?;
 

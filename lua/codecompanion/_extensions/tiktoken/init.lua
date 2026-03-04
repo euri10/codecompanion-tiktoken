@@ -33,34 +33,14 @@ function Extension.setup(opts)
           vim.notify("Token breakdown: chat not found", vim.log.levels.WARN)
           return
         end
-
         local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-
-        local total_tokens = 0
-        local total_estimated_tokens = 0
-
-        for _, message in ipairs(chat.messages) do
-          local count = 0
-          local estimated = 0
-          if not message.content then
-            count = 0
-            estimated = 0
-          else
-            count = tiktoken.count_text(message.content, model_name)
-            if message._meta and message._meta.estimated_tokens then
-              estimated = message._meta.estimated_tokens
-            else
-              estimated = 0
-            end
-          end
-          total_tokens = total_tokens + count
-          total_estimated_tokens = total_estimated_tokens + estimated
-        end
+	local other_count = tiktoken.count_messages(chat.messages, model_name)
         -- Notify UI only (no floating window)
         local lines = {}
         table.insert(lines, "-------------------------------")
 	table.insert(lines, string.format("----- %s -----", event))
-        table.insert(lines, string.format("Total: %d | Estimated: %d", total_tokens, total_estimated_tokens))
+	table.insert(lines, string.format("tiktoken: %d", other_count))
+        table.insert(lines, "-------------------------------")
         vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
       end,
     })
