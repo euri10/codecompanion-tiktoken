@@ -85,13 +85,13 @@ function Extension.setup(opts)
   --- @param elapsed_s number
   --- @param tps number
   --- @param label string  e.g. "prompt" or "generation"
-  --- @param estimated_tokens integer|nil
+  --- @param total_estimated integer|nil
   --- @return string
-  local function stat_line(tokens, elapsed_s, tps, label, estimated_tokens)
-    if estimated_tokens and estimated_tokens > 0 then
+  local function stat_line(tokens, elapsed_s, tps, label, total_estimated)
+    if total_estimated and total_estimated > 0 then
       return string.format(
-        "≈ %d tokens (est: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)",
-        tokens, estimated_tokens, elapsed_s, tps, label
+        "≈ %d tokens (heuristic total: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)",
+        tokens, total_estimated, elapsed_s, tps, label
       )
     else
       return string.format(
@@ -115,12 +115,12 @@ function Extension.setup(opts)
   --- @param label string  event label for the header line
   local function notify_prompt_tokens(chat, label)
     local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-    --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil, breakdown: table|nil }
+    --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, total_estimated: integer|nil, breakdown: table|nil }
     local result = tiktoken.count_messages(chat.messages, model_name)
     local lines = {
       "-------------------------------",
       string.format("⊛ %s  [%s]", model_name, label),
-      stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
+      stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.total_estimated),
     }
     for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
       table.insert(lines, l)
@@ -233,12 +233,12 @@ function Extension.setup(opts)
       local chat, bufnr = chat_from_args(args)
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil, breakdown: table|nil }
+      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, total_estimated: integer|nil, breakdown: table|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [done]", model_name),
-        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
+        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.total_estimated),
       }
       for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
         table.insert(lines, l)
@@ -273,12 +273,12 @@ function Extension.setup(opts)
 
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil, breakdown: table|nil }
+      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, total_estimated: integer|nil, breakdown: table|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [stopped]", model_name),
-        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
+        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.total_estimated),
       }
       for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
         table.insert(lines, l)

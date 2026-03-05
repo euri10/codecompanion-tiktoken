@@ -333,7 +333,7 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
             result.set("tokens", total)?;
             result.set("elapsed_ms", elapsed_ms)?;
             result.set("tokens_per_sec", tokens_per_sec)?;
-            result.set("estimated_tokens", estimated_tokens_sum)?;
+            result.set("total_estimated", estimated_tokens_sum)?;
             result.set("breakdown", breakdown)?;
             Ok(result)
         })?;
