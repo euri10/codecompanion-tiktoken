@@ -187,7 +187,7 @@ function Extension.setup(opts)
       local result = tiktoken.count_messages(chat.messages, model_name)
       request_snapshots[bufnr] = {
         tokens       = result.tokens,
-        time_ms      = vim.uv.now(),
+        time_ms      = math.floor(vim.loop.hrtime() / 1e6),
         is_streaming = false,
       }
     end,
@@ -214,7 +214,7 @@ function Extension.setup(opts)
         local result = tiktoken.count_messages(chat.messages, model_name)
         request_snapshots[bufnr] = {
           tokens       = result.tokens,
-          time_ms      = vim.uv.now(),
+          time_ms      = math.floor(vim.loop.hrtime() / 1e6),
           is_streaming = true,
         }
       end
@@ -245,7 +245,7 @@ function Extension.setup(opts)
       end
       local snap = request_snapshots[bufnr]
       if snap then
-        local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
+        local wall_elapsed_s = (math.floor(vim.loop.hrtime() / 1e6) - snap.time_ms) / 1000.0
         local gen_tokens = result.tokens - snap.tokens
         if gen_tokens > 0 and wall_elapsed_s > 0 then
           local gen_label = snap.is_streaming and "streaming generation" or "generation"
@@ -284,7 +284,7 @@ function Extension.setup(opts)
         table.insert(lines, l)
       end
       if snap then
-        local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
+        local wall_elapsed_s = (math.floor(vim.loop.hrtime() / 1e6) - snap.time_ms) / 1000.0
         local gen_tokens = result.tokens - snap.tokens
         if gen_tokens > 0 and wall_elapsed_s > 0 then
           local partial_label = snap.is_streaming and "partial streaming" or "partial generation"
@@ -329,7 +329,7 @@ function Extension.setup(opts)
       local token_count = tiktoken.count_text(content, model_name)
       inline_snapshots[bufnr] = {
         tokens   = token_count,
-        time_ms  = vim.uv.now(),
+        time_ms  = math.floor(vim.loop.hrtime() / 1e6),
         model    = model_name,
       }
     end,
@@ -363,7 +363,7 @@ function Extension.setup(opts)
       }
 
       if snap then
-        local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
+        local wall_elapsed_s = (math.floor(vim.loop.hrtime() / 1e6) - snap.time_ms) / 1000.0
         local delta = new_tokens - snap.tokens
         local sign = delta >= 0 and "+" or ""
         table.insert(info_lines, string.format(
@@ -396,7 +396,7 @@ function Extension.setup(opts)
       local result = tiktoken.count_messages(chat.messages, model_name)
       tools_cycle_snapshots[bufnr] = {
         tokens     = result.tokens,
-        time_ms    = vim.uv.now(),
+        time_ms    = math.floor(vim.loop.hrtime() / 1e6),
         tool_count = 0,
       }
     end,
@@ -446,7 +446,7 @@ function Extension.setup(opts)
       }
 
       if snap then
-        local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
+        local wall_elapsed_s = (math.floor(vim.loop.hrtime() / 1e6) - snap.time_ms) / 1000.0
         local delta = result.tokens - snap.tokens
         local sign  = delta >= 0 and "+" or ""
         table.insert(info_lines, string.format(
