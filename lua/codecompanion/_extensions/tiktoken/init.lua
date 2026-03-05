@@ -27,24 +27,23 @@ function Extension.setup(opts)
   for _, event in ipairs(relevant_events) do
     vim.api.nvim_create_autocmd("User", {
       pattern = event,
-      callback = function(args)
+        callback = function(args)
         local chat = require("codecompanion").buf_get_chat(args.data and args.data.bufnr or 0)
         if not chat then
           vim.notify("Token breakdown: chat not found", vim.log.levels.WARN)
           return
         end
         local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-        local other_count = tiktoken.count_messages(chat.messages, model_name)
-        -- Call llama.cpp-style output for chat.messages
-        if tiktoken.llama_cpp_style_output then
-          tiktoken.llama_cpp_style_output(chat.messages, model_name)
-        end
-        -- Notify UI only (no floating window)
-        local lines = {}
-        table.insert(lines, "-------------------------------")
-        table.insert(lines, string.format("----- %s -----", event))
-        table.insert(lines, string.format("tiktoken: %d", other_count))
-        table.insert(lines, "-------------------------------")
+        --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number }
+        local result = tiktoken.count_messages(chat.messages, model_name)
+        local elapsed_s = result.elapsed_ms / 1000.0
+        local lines = {
+          "-------------------------------",
+          string.format("----- %s -----", event),
+          string.format("⊛ %s", model_name),
+          string.format("≈ %d tokens  ⊙ %.2fs  ↺ %.2f t/s", result.tokens, elapsed_s, result.tokens_per_sec),
+          "-------------------------------",
+        }
         vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
       end,
     })
