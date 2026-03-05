@@ -14,6 +14,33 @@ function Extension.setup(opts)
     return
   end
 
+  --- Per-buffer tiktoken count, updated after each completed turn.
+  --- Used to annotate the built-in heuristic count in the chat header.
+  --- @type table<integer, integer>
+  local tiktoken_counts = {}
+
+  -- Override the built-in token_count display to show both the heuristic
+  -- (codecompanion native) count and the accurate tiktoken count side-by-side.
+  -- e.g. "(123 tokens · tiktoken: 117)"
+  -- nvim_get_current_buf() is safe here: display_tokens is always called
+  -- synchronously from within the chat buffer's response handling.
+  do
+    local cc_config = require("codecompanion.config")
+    local orig = cc_config.display.chat.token_count
+    cc_config.display.chat.token_count = function(builtin_tokens, adapter)
+      local bufnr = vim.api.nvim_get_current_buf()
+      local tkt = tiktoken_counts[bufnr]
+      if tkt then
+        local diff = tkt - builtin_tokens
+        local pct = builtin_tokens > 0
+          and string.format(", %s%d%%", diff >= 0 and "+" or "", math.floor(diff / builtin_tokens * 100 + 0.5))
+          or ""
+        return string.format(" (%d tokens · tiktoken: %d%s)", builtin_tokens, tkt, pct)
+      end
+      return orig(builtin_tokens, adapter)
+    end
+  end
+
   --- Per-buffer snapshot taken at CodeCompanionRequestStarted (or RequestStreaming).
   --- Wall-clock time is captured at the moment the HTTP request fires so that
   --- generation t/s reflects actual API latency rather than any pre-request lag.
@@ -165,8 +192,13 @@ function Extension.setup(opts)
   vim.api.nvim_create_autocmd("User", {
     pattern = "CodeCompanionChatSubmitted",
     callback = function(args)
-      local chat, _ = chat_from_args(args)
+      local chat, bufnr = chat_from_args(args)
       if not chat then return end
+      -- Also update the header token cache so the extmark reflects the
+      -- tiktoken count immediately on submit (before the response arrives).
+      local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
+      local result = tiktoken.count_messages(chat.messages, model_name)
+      tiktoken_counts[bufnr] = result.tokens
       notify_prompt_tokens(chat, "submitted")
     end,
   })
@@ -235,6 +267,7 @@ function Extension.setup(opts)
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
       --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, total_estimated: integer|nil, breakdown: table|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
+      tiktoken_counts[bufnr] = result.tokens
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [done]", model_name),
@@ -306,6 +339,7 @@ function Extension.setup(opts)
       local bufnr = args.data and args.data.bufnr or 0
       request_snapshots[bufnr] = nil
       tools_cycle_snapshots[bufnr] = nil
+      tiktoken_counts[bufnr] = nil
     end,
   })
 
