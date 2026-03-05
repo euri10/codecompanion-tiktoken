@@ -220,8 +220,12 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
         Ok(bpe.encode_with_special_tokens(&text).len())
     })?;
 
-    // Count chat messages — returns a table with `tokens`, `elapsed_ms`, and `tokens_per_sec`
-    // so callers can render llama.cpp-style throughput output.
+    // Count chat messages — returns a table with `tokens`, `elapsed_ms`, `tokens_per_sec`,
+    // `estimated_tokens`, and a `breakdown` sub-table keyed by role/overhead.
+    //
+    // `breakdown` fields:
+    //   system, user, assistant, tool, overhead
+    //   system_tags: table<string, integer>  (keyed by _meta.tag, only system messages)
     let count_messages =
         lua.create_function(|lua, (messages, model): (LuaTable, Option<String>)| {
             let model_name = model.unwrap_or_else(|| "cl100k_base".to_string());
@@ -230,6 +234,17 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
 
             let mut total: usize = 0;
             let mut estimated_tokens_sum: u64 = 0;
+
+            // Per-role content buckets (excluding overhead).
+            let mut bucket_system: usize = 0;
+            let mut bucket_user: usize = 0;
+            let mut bucket_assistant: usize = 0;
+            let mut bucket_tool: usize = 0;
+            // Per-tag sub-buckets within system messages.
+            let mut system_tags: HashMap<String, usize> = HashMap::new();
+            // Overhead: per-message constants accumulated here.
+            let mut bucket_overhead: usize = 0;
+
             let start = Instant::now();
 
             for pair in messages.sequence_values::<LuaValue>() {
@@ -238,24 +253,46 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
                     .from_value(val)
                     .map_err(|e| LuaError::external(format!("message deserialise: {e}")))?;
 
+                // Per-message overhead (role encoding + structural tokens).
+                let mut msg_overhead: usize = 0;
                 if tokens_per_message > 0 {
-                    total += tokens_per_message as usize;
+                    msg_overhead += tokens_per_message as usize;
                 }
+                msg_overhead += bpe.encode_with_special_tokens(msg.role.as_str()).len();
 
-                total += bpe.encode_with_special_tokens(msg.role.as_str()).len();
-
+                // Content tokens for this message.
+                let mut msg_content: usize = 0;
                 if let Some(ref content) = msg.content {
-                    total += bpe.encode_with_special_tokens(content).len();
+                    msg_content += bpe.encode_with_special_tokens(content).len();
                 }
-
                 if let Some(ref tools) = msg.tools
                     && let Some(ref calls) = tools.calls
                 {
                     for tc in calls {
-                        total += bpe.encode_with_special_tokens(&tc.function.name).len();
-                        total += bpe.encode_with_special_tokens(&tc.function.arguments).len();
+                        msg_content += bpe.encode_with_special_tokens(&tc.function.name).len();
+                        msg_content += bpe.encode_with_special_tokens(&tc.function.arguments).len();
                     }
                 }
+
+                // Route content into the correct role bucket.
+                match msg.role {
+                    Role::System => {
+                        bucket_system += msg_content;
+                        // Sub-bucket by _meta.tag when present.
+                        let tag = msg
+                            .meta
+                            .as_ref()
+                            .and_then(|m| m.tag.as_deref())
+                            .unwrap_or("untagged");
+                        *system_tags.entry(tag.to_string()).or_insert(0) += msg_content;
+                    }
+                    Role::User => bucket_user += msg_content,
+                    Role::Llm => bucket_assistant += msg_content,
+                    Role::Tool => bucket_tool += msg_content,
+                }
+                bucket_overhead += msg_overhead;
+
+                total += msg_overhead + msg_content;
 
                 // Sum estimated_tokens if present
                 if let Some(ref meta) = msg.meta
@@ -265,7 +302,10 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
                 }
             }
 
-            total += 3; // assistant priming
+            // Assistant priming — counted as overhead.
+            let priming: usize = 3;
+            bucket_overhead += priming;
+            total += priming;
 
             let elapsed_secs = start.elapsed().as_secs_f64();
             let elapsed_ms = elapsed_secs * 1000.0;
@@ -275,11 +315,26 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
                 0.0
             };
 
+            // Build the breakdown sub-table.
+            let breakdown = lua.create_table()?;
+            breakdown.set("system", bucket_system)?;
+            breakdown.set("user", bucket_user)?;
+            breakdown.set("assistant", bucket_assistant)?;
+            breakdown.set("tool", bucket_tool)?;
+            breakdown.set("overhead", bucket_overhead)?;
+
+            let tags_table = lua.create_table()?;
+            for (tag, count) in &system_tags {
+                tags_table.set(tag.as_str(), *count)?;
+            }
+            breakdown.set("system_tags", tags_table)?;
+
             let result = lua.create_table()?;
             result.set("tokens", total)?;
             result.set("elapsed_ms", elapsed_ms)?;
             result.set("tokens_per_sec", tokens_per_sec)?;
             result.set("estimated_tokens", estimated_tokens_sum)?;
+            result.set("breakdown", breakdown)?;
             Ok(result)
         })?;
 

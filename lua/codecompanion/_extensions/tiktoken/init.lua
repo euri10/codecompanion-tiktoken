@@ -30,7 +30,57 @@ function Extension.setup(opts)
   --- @type table<integer, { tokens: integer, time_ms: integer, tool_count: integer }>
   local tools_cycle_snapshots = {}
 
-  --- Render a single llama.cpp-style stat line, now with estimated tokens.
+  --- Format a per-role token breakdown into display lines.
+  --- Only rows with >0 tokens are shown.  Percentages are relative to `total`.
+  --- @param breakdown table  The `breakdown` sub-table returned by `count_messages`
+  --- @param total integer    Grand total token count for percentage calculation
+  --- @return string[]        Extra lines to append before the closing separator
+  local function format_breakdown(breakdown, total)
+    if not breakdown or total == 0 then return {} end
+
+    local rows = {
+      { label = "system",   value = breakdown.system    or 0 },
+      { label = "user",     value = breakdown.user      or 0 },
+      { label = "assistant",value = breakdown.assistant or 0 },
+      { label = "tool",     value = breakdown.tool      or 0 },
+      { label = "overhead", value = breakdown.overhead  or 0 },
+    }
+
+    local lines = {}
+    for _, row in ipairs(rows) do
+      if row.value > 0 then
+        local pct = math.floor(row.value / total * 100 + 0.5)
+        table.insert(lines, string.format(
+          "  %-9s │ %5d  (%d%%)", row.label, row.value, pct
+        ))
+      end
+    end
+
+    -- System sub-tag breakdown (only if ≥2 distinct tags)
+    local tags = breakdown.system_tags
+    if tags then
+      local tag_rows = {}
+      for tag, count in pairs(tags) do
+        if count > 0 then
+          table.insert(tag_rows, { label = tag, value = count })
+        end
+      end
+      table.sort(tag_rows, function(a, b) return a.value > b.value end)
+      if #tag_rows >= 2 then
+        table.insert(lines, "  system breakdown:")
+        for _, row in ipairs(tag_rows) do
+          local pct = math.floor(row.value / (breakdown.system or 1) * 100 + 0.5)
+          table.insert(lines, string.format(
+            "    %-28s │ %5d  (%d%%)", row.label, row.value, pct
+          ))
+        end
+      end
+    end
+
+    return lines
+  end
+
+
   --- @param tokens integer
   --- @param elapsed_s number
   --- @param tps number
@@ -65,14 +115,17 @@ function Extension.setup(opts)
   --- @param label string  event label for the header line
   local function notify_prompt_tokens(chat, label)
     local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-    --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil }
+    --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil, breakdown: table|nil }
     local result = tiktoken.count_messages(chat.messages, model_name)
     local lines = {
       "-------------------------------",
       string.format("⊛ %s  [%s]", model_name, label),
       stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
-      "-------------------------------",
     }
+    for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
+      table.insert(lines, l)
+    end
+    table.insert(lines, "-------------------------------")
     vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
   end
 
@@ -180,13 +233,16 @@ function Extension.setup(opts)
       local chat, bufnr = chat_from_args(args)
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil }
+      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil, breakdown: table|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [done]", model_name),
         stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
       }
+      for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
+        table.insert(lines, l)
+      end
       local snap = request_snapshots[bufnr]
       if snap then
         local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
@@ -217,13 +273,16 @@ function Extension.setup(opts)
 
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil }
+      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil, breakdown: table|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [stopped]", model_name),
         stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
       }
+      for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
+        table.insert(lines, l)
+      end
       if snap then
         local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
         local gen_tokens = result.tokens - snap.tokens
