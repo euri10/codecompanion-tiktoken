@@ -14,11 +14,20 @@ function Extension.setup(opts)
     return
   end
 
-  --- Per-buffer snapshot taken at CodeCompanionRequestStarted.
+  --- Per-buffer snapshot taken at CodeCompanionRequestStarted (or RequestStreaming).
   --- Wall-clock time is captured at the moment the HTTP request fires so that
   --- generation t/s reflects actual API latency rather than any pre-request lag.
-  --- @type table<integer, { tokens: integer, time_ms: integer }>
+  --- @type table<integer, { tokens: integer, time_ms: integer, is_streaming: boolean }>
   local request_snapshots = {}
+
+  --- Per-buffer snapshot taken at CodeCompanionInlineStarted.
+  --- @type table<integer, { tokens: integer, time_ms: integer, model: string }>
+  local inline_snapshots = {}
+
+  --- Per-buffer snapshot taken at CodeCompanionToolStarted.
+  --- Tracks the token count before each tool runs so we can show the delta.
+  --- @type table<integer, { tokens: integer, time_ms: integer, tool_name: string }>
+  local tool_snapshots = {}
 
   --- Render a single llama.cpp-style stat line, now with estimated tokens.
   --- @param tokens integer
@@ -29,15 +38,22 @@ function Extension.setup(opts)
   --- @return string
   local function stat_line(tokens, elapsed_s, tps, label, estimated_tokens)
     if estimated_tokens and estimated_tokens > 0 then
-      return string.format("≈ %d tokens (est: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)", tokens, estimated_tokens, elapsed_s, tps, label)
+      return string.format(
+        "≈ %d tokens (est: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)",
+        tokens, estimated_tokens, elapsed_s, tps, label
+      )
     else
-      return string.format("≈ %d tokens  ⊙ %.2fs  ↺ %.2f t/s  (%s)", tokens, elapsed_s, tps, label)
+      return string.format(
+        "≈ %d tokens  ⊙ %.2fs  ↺ %.2f t/s  (%s)",
+        tokens, elapsed_s, tps, label
+      )
     end
   end
 
-  --- Retrieve the chat object from event data, returning nil silently on failure.
+  --- Retrieve the chat object and bufnr from autocmd event data.
+  --- Returns nil on failure; all callers guard against nil.
   --- @param args table  autocmd callback args
-  --- @return table|nil
+  --- @return table|nil chat, integer bufnr
   local function chat_from_args(args)
     local bufnr = args.data and args.data.bufnr or 0
     return require("codecompanion").buf_get_chat(bufnr), bufnr
@@ -54,31 +70,6 @@ function Extension.setup(opts)
       "-------------------------------",
       string.format("⊛ %s  [%s]", model_name, label),
       stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
-      "-------------------------------",
-    }
-    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
-  end
-
-
-  --- Retrieve the chat object from event data, returning nil silently on failure.
-  --- @param args table  autocmd callback args
-  --- @return table|nil
-  local function chat_from_args(args)
-    local bufnr = args.data and args.data.bufnr or 0
-    return require("codecompanion").buf_get_chat(bufnr), bufnr
-  end
-
-  --- Count tokens for the current message list and show a prompt-only notification.
-  --- @param chat table  CodeCompanion chat object
-  --- @param label string  event label for the header line
-  local function notify_prompt_tokens(chat, label)
-    local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-    --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number }
-    local result = tiktoken.count_messages(chat.messages, model_name)
-    local lines = {
-      "-------------------------------",
-      string.format("⊛ %s  [%s]", model_name, label),
-      stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt"),
       "-------------------------------",
     }
     vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
@@ -128,9 +119,9 @@ function Extension.setup(opts)
 
   -- ---------------------------------------------------------------------------
   -- CodeCompanionRequestStarted
-  -- Capture a snapshot (token count + wall-clock time) at the exact moment the
-  -- HTTP request fires.  Using this event instead of ChatSubmitted means the
-  -- generation t/s measurement excludes any pre-request processing time.
+  -- Capture a baseline snapshot (token count + wall-clock time) at the exact
+  -- moment any API request fires.  For streaming calls, RequestStreaming will
+  -- fire shortly after and update is_streaming in place.
   -- ---------------------------------------------------------------------------
   vim.api.nvim_create_autocmd("User", {
     pattern = "CodeCompanionRequestStarted",
@@ -141,16 +132,46 @@ function Extension.setup(opts)
       --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number }
       local result = tiktoken.count_messages(chat.messages, model_name)
       request_snapshots[bufnr] = {
-        tokens  = result.tokens,
-        time_ms = vim.uv.now(),
+        tokens       = result.tokens,
+        time_ms      = vim.uv.now(),
+        is_streaming = false,
       }
+    end,
+  })
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionRequestStreaming
+  -- Fires only for streaming API requests (after RequestStarted).  We annotate
+  -- the existing snapshot so the Done/Stopped handlers can label generation
+  -- stats as "streaming generation" vs plain "generation".
+  -- If no RequestStarted snapshot exists yet (race), we create one here.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionRequestStreaming",
+    callback = function(args)
+      local chat, bufnr = chat_from_args(args)
+      if not chat then return end
+      local snap = request_snapshots[bufnr]
+      if snap then
+        snap.is_streaming = true
+      else
+        -- Fallback: create snapshot if RequestStarted somehow did not fire first.
+        local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
+        local result = tiktoken.count_messages(chat.messages, model_name)
+        request_snapshots[bufnr] = {
+          tokens       = result.tokens,
+          time_ms      = vim.uv.now(),
+          is_streaming = true,
+        }
+      end
     end,
   })
 
   -- ---------------------------------------------------------------------------
   -- CodeCompanionChatDone
   -- Show both prompt and generation stats.  Generation delta is computed from
-  -- the snapshot recorded at RequestStarted so t/s reflects true API latency.
+  -- the snapshot recorded at RequestStarted/RequestStreaming so t/s reflects
+  -- true API latency.  The generation label notes whether it was streaming.
   -- ---------------------------------------------------------------------------
   vim.api.nvim_create_autocmd("User", {
     pattern = "CodeCompanionChatDone",
@@ -158,7 +179,7 @@ function Extension.setup(opts)
       local chat, bufnr = chat_from_args(args)
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number }
+      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
       local lines = {
         "-------------------------------",
@@ -170,8 +191,9 @@ function Extension.setup(opts)
         local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
         local gen_tokens = result.tokens - snap.tokens
         if gen_tokens > 0 and wall_elapsed_s > 0 then
-          local gen_tps = gen_tokens / wall_elapsed_s
-          table.insert(lines, stat_line(gen_tokens, wall_elapsed_s, gen_tps, "generation"))
+          local gen_label = snap.is_streaming and "streaming generation" or "generation"
+          local gen_tps   = gen_tokens / wall_elapsed_s
+          table.insert(lines, stat_line(gen_tokens, wall_elapsed_s, gen_tps, gen_label))
         end
         request_snapshots[bufnr] = nil
       end
@@ -194,7 +216,7 @@ function Extension.setup(opts)
 
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number }
+      --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil }
       local result = tiktoken.count_messages(chat.messages, model_name)
       local lines = {
         "-------------------------------",
@@ -205,7 +227,8 @@ function Extension.setup(opts)
         local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
         local gen_tokens = result.tokens - snap.tokens
         if gen_tokens > 0 and wall_elapsed_s > 0 then
-          table.insert(lines, stat_line(gen_tokens, wall_elapsed_s, gen_tokens / wall_elapsed_s, "partial generation"))
+          local partial_label = snap.is_streaming and "partial streaming" or "partial generation"
+          table.insert(lines, stat_line(gen_tokens, wall_elapsed_s, gen_tokens / wall_elapsed_s, partial_label))
         end
       end
       table.insert(lines, "-------------------------------")
@@ -215,13 +238,153 @@ function Extension.setup(opts)
 
   -- ---------------------------------------------------------------------------
   -- CodeCompanionChatClosed
-  -- Clean up any lingering snapshot when a chat buffer is permanently closed.
+  -- Clean up any lingering snapshots when a chat buffer is permanently closed.
   -- ---------------------------------------------------------------------------
   vim.api.nvim_create_autocmd("User", {
     pattern = "CodeCompanionChatClosed",
     callback = function(args)
       local bufnr = args.data and args.data.bufnr or 0
       request_snapshots[bufnr] = nil
+      tool_snapshots[bufnr] = nil
+    end,
+  })
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionInlineStarted
+  -- Capture the token count of the current buffer content and a wall-clock
+  -- timestamp.  This lets InlineFinished compute how many tokens the inline
+  -- edit generated and how fast it arrived.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionInlineStarted",
+    callback = function(args)
+      local bufnr = args.buf or 0
+      -- Resolve model name from the event data if available, fall back to cl100k.
+      local model_name = (args.data
+        and args.data.adapter
+        and args.data.adapter.model
+        or "cl100k_base")
+      local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      local content = table.concat(lines, "\n")
+      local token_count = tiktoken.count_text(content, model_name)
+      inline_snapshots[bufnr] = {
+        tokens   = token_count,
+        time_ms  = vim.uv.now(),
+        model    = model_name,
+      }
+    end,
+  })
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionInlineFinished
+  -- Count tokens in the (now-modified) buffer and display the delta — i.e.
+  -- how many net tokens the inline edit added — plus generation t/s.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionInlineFinished",
+    callback = function(args)
+      local bufnr = args.buf or 0
+      local snap = inline_snapshots[bufnr]
+      inline_snapshots[bufnr] = nil
+
+      local model_name = (args.data
+        and args.data.adapter
+        and args.data.adapter.model
+        or (snap and snap.model or "cl100k_base"))
+      local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      local content = table.concat(lines, "\n")
+      local new_tokens = tiktoken.count_text(content, model_name)
+
+      local header = string.format("⊛ %s  [inline]", model_name)
+      local info_lines = {
+        "-------------------------------",
+        header,
+        string.format("≈ %d tokens  (buffer after edit)", new_tokens),
+      }
+
+      if snap then
+        local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
+        local delta = new_tokens - snap.tokens
+        local sign = delta >= 0 and "+" or ""
+        table.insert(info_lines, string.format(
+          "Δ %s%d tokens  ⊙ %.2fs  (inline delta)",
+          sign, delta, wall_elapsed_s
+        ))
+      end
+
+      table.insert(info_lines, "-------------------------------")
+      vim.notify(
+        table.concat(info_lines, "\n"),
+        vim.log.levels.INFO,
+        { title = "Token Breakdown (inline)" }
+      )
+    end,
+  })
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionToolStarted
+  -- Snapshot the prompt token count right before a tool executes.  This lets
+  -- ToolFinished show how many tokens the tool output added to the context.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionToolStarted",
+    callback = function(args)
+      local chat, bufnr = chat_from_args(args)
+      if not chat then return end
+      local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
+      local result = tiktoken.count_messages(chat.messages, model_name)
+      -- args.data may carry the tool name under different keys depending on plugin version.
+      local tool_name = (args.data and (args.data.tool_name or args.data.name or args.data.tool)) or "unknown tool"
+      tool_snapshots[bufnr] = {
+        tokens    = result.tokens,
+        time_ms   = vim.uv.now(),
+        tool_name = tool_name,
+      }
+    end,
+  })
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionToolFinished
+  -- Compare token count to the ToolStarted snapshot.  A positive delta means
+  -- the tool appended content to the conversation context.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionToolFinished",
+    callback = function(args)
+      local chat, bufnr = chat_from_args(args)
+      local snap = tool_snapshots[bufnr]
+      tool_snapshots[bufnr] = nil
+
+      if not chat then return end
+      local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
+      local result = tiktoken.count_messages(chat.messages, model_name)
+
+      local tool_name = (snap and snap.tool_name)
+        or (args.data and (args.data.tool_name or args.data.name or args.data.tool))
+        or "unknown tool"
+
+      local info_lines = {
+        "-------------------------------",
+        string.format("⊛ %s  [tool: %s]", model_name, tool_name),
+        string.format("≈ %d tokens  (context after tool)", result.tokens),
+      }
+
+      if snap then
+        local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
+        local delta = result.tokens - snap.tokens
+        local sign = delta >= 0 and "+" or ""
+        table.insert(info_lines, string.format(
+          "Δ %s%d tokens  ⊙ %.2fs  (tool output)",
+          sign, delta, wall_elapsed_s
+        ))
+      end
+
+      table.insert(info_lines, "-------------------------------")
+      vim.notify(
+        table.concat(info_lines, "\n"),
+        vim.log.levels.INFO,
+        { title = "Token Breakdown (tool)" }
+      )
     end,
   })
 end

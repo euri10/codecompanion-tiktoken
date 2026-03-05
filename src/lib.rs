@@ -4,7 +4,9 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
-use tiktoken_rs::{CoreBPE, cl100k_base, o200k_base, o200k_harmony, p50k_base, p50k_edit, r50k_base};
+use tiktoken_rs::{
+    CoreBPE, cl100k_base, o200k_base, o200k_harmony, p50k_base, p50k_edit, r50k_base,
+};
 
 /// Cache tokenizers for performance — avoids re-loading BPE data on every call.
 static CACHE: Lazy<Mutex<HashMap<String, CoreBPE>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -250,20 +252,16 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
                     && let Some(ref calls) = tools.calls
                 {
                     for tc in calls {
-                        total += bpe
-                            .encode_with_special_tokens(&tc.function.name)
-                            .len();
-                        total += bpe
-                            .encode_with_special_tokens(&tc.function.arguments)
-                            .len();
+                        total += bpe.encode_with_special_tokens(&tc.function.name).len();
+                        total += bpe.encode_with_special_tokens(&tc.function.arguments).len();
                     }
                 }
 
                 // Sum estimated_tokens if present
-                if let Some(ref meta) = msg.meta {
-                    if let Some(estimate) = meta.estimated_tokens {
-                        estimated_tokens_sum += estimate;
-                    }
+                if let Some(ref meta) = msg.meta
+                    && let Some(estimate) = meta.estimated_tokens
+                {
+                    estimated_tokens_sum += estimate;
                 }
             }
 
@@ -438,9 +436,8 @@ mod tests {
         let (tokens_per_message, _tokens_per_name) = model_constants("gpt-4o");
 
         // Build minimal Message values directly (no Lua runtime needed in unit tests).
-        let make_message = |role: Role, content: &str| -> (Role, String) {
-            (role, content.to_string())
-        };
+        let make_message =
+            |role: Role, content: &str| -> (Role, String) { (role, content.to_string()) };
 
         let messages = [
             make_message(
@@ -468,7 +465,10 @@ mod tests {
         }
         total += 3; // assistant priming
 
-        assert!(total > 50, "expected at least 50 tokens for Lua messages, got {total}");
+        assert!(
+            total > 50,
+            "expected at least 50 tokens for Lua messages, got {total}"
+        );
     }
 
     /// Verify that the "gpt-4o" model (o200k_base) tokenises identically for
