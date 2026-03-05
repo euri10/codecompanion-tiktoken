@@ -8,6 +8,8 @@ use tiktoken_rs::{
 // Cache tokenizers for performance
 static CACHE: Lazy<Mutex<HashMap<String, CoreBPE>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
+
+
 // Map model name → BPE initializer
 fn tokenizer_for_model(model: &str) -> CoreBPE {
     let mut cache = CACHE.lock().unwrap();
@@ -130,12 +132,95 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
             Ok(total)
         })?;
 
-    
+    // Expose llama.cpp-style output function
+    let llama_cpp_style_output = lua.create_function(|_, (input, model): (LuaValue, Option<String>)| {
+        use std::time::Instant;
+        let model_name = model.unwrap_or_else(|| "cl100k_base".to_string());
+        let bpe = tokenizer_for_model(&model_name);
+        let mut token_count = 0usize;
+        let start = Instant::now();
+        match input {
+            LuaValue::String(s) => {
+                let text = s.to_str()?;
+                token_count = bpe.encode_with_special_tokens(&text).len();
+            },
+            LuaValue::Table(messages) => {
+                let (tokens_per_message, tokens_per_name) = model_constants(&model_name);
+                for pair in messages.sequence_values::<LuaTable>() {
+                    let msg = pair?;
+                    if tokens_per_message > 0 {
+                        token_count += tokens_per_message as usize;
+                    }
+                    if let Ok(role) = msg.get::<String>("role") {
+                        token_count += bpe.encode_with_special_tokens(&role).len();
+                    }
+                    if let Ok(content) = msg.get::<String>("content") {
+                        token_count += bpe.encode_with_special_tokens(&content).len();
+                    }
+                    if let Ok(name) = msg.get::<String>("name") {
+                        token_count += bpe.encode_with_special_tokens(&name).len();
+                        if tokens_per_name > 0 {
+                            token_count += tokens_per_name as usize;
+                        }
+                    }
+                    if let Ok(tool_calls) = msg.get::<LuaTable>("tool_calls") {
+                        for tc in tool_calls.sequence_values::<LuaTable>() {
+                            let tc = tc?;
+                            if let Ok(func) = tc.get::<LuaTable>("function") {
+                                if let Ok(name) = func.get::<String>("name") {
+                                    token_count += bpe.encode_with_special_tokens(&name).len();
+                                }
+                                if let Ok(args) = func.get::<String>("arguments") {
+                                    token_count += bpe.encode_with_special_tokens(&args).len();
+                                }
+                            }
+                        }
+                    }
+                }
+                token_count += 3; // assistant priming
+            },
+            _ => return Err(mlua::Error::FromLuaConversionError { from: input.type_name(), to: "string or table".to_string(), message: Some("Input must be a string or table".into()) }),
+        }
+        let elapsed = start.elapsed();
+        let elapsed_secs = elapsed.as_secs_f64();
+        let rate = if elapsed_secs > 0.0 {
+            token_count as f64 / elapsed_secs
+        } else {
+            token_count as f64
+        };
+        // Return stats for Lua
+        #[derive(Debug, Clone, Copy)]
+        struct PromptStats {
+            token_count: usize,
+            elapsed_secs: f64,
+            rate: f64,
+        }
+        impl mlua::UserData for PromptStats {
+            fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+                methods.add_method("token_count", |_, this, _args: mlua::Variadic<mlua::Value>| Ok(this.token_count));
+                methods.add_method("elapsed_secs", |_, this, _args: mlua::Variadic<mlua::Value>| Ok(this.elapsed_secs));
+                methods.add_method("rate", |_, this, _args: mlua::Variadic<mlua::Value>| Ok(this.rate));
+            }
+        }
+            let stats = PromptStats {
+                token_count,
+                elapsed_secs,
+                rate,
+            };
+            Ok(stats)
+
+
+        // Generation (token output) simulation
+    })?;
+
     exports.set("count_text", count_text)?;
     exports.set("count_messages", count_messages)?;
+    exports.set("llama_cpp_style_output", llama_cpp_style_output)?;
+
 
     Ok(exports)
 }
+
 
 #[cfg(test)]
 mod tests {

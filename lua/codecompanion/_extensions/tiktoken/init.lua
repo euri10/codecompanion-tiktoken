@@ -34,12 +34,16 @@ function Extension.setup(opts)
           return
         end
         local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
-	local other_count = tiktoken.count_messages(chat.messages, model_name)
+        local other_count = tiktoken.count_messages(chat.messages, model_name)
+        -- Call llama.cpp-style output for chat.messages
+        if tiktoken.llama_cpp_style_output then
+          tiktoken.llama_cpp_style_output(chat.messages, model_name)
+        end
         -- Notify UI only (no floating window)
         local lines = {}
         table.insert(lines, "-------------------------------")
-	table.insert(lines, string.format("----- %s -----", event))
-	table.insert(lines, string.format("tiktoken: %d", other_count))
+        table.insert(lines, string.format("----- %s -----", event))
+        table.insert(lines, string.format("tiktoken: %d", other_count))
         table.insert(lines, "-------------------------------")
         vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
       end,
