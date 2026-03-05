@@ -227,6 +227,7 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
             let (tokens_per_message, _tokens_per_name) = model_constants(&model_name);
 
             let mut total: usize = 0;
+            let mut estimated_tokens_sum: u64 = 0;
             let start = Instant::now();
 
             for pair in messages.sequence_values::<LuaValue>() {
@@ -257,6 +258,13 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
                             .len();
                     }
                 }
+
+                // Sum estimated_tokens if present
+                if let Some(ref meta) = msg.meta {
+                    if let Some(estimate) = meta.estimated_tokens {
+                        estimated_tokens_sum += estimate;
+                    }
+                }
             }
 
             total += 3; // assistant priming
@@ -273,6 +281,7 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
             result.set("tokens", total)?;
             result.set("elapsed_ms", elapsed_ms)?;
             result.set("tokens_per_sec", tokens_per_sec)?;
+            result.set("estimated_tokens", estimated_tokens_sum)?;
             Ok(result)
         })?;
 
