@@ -47,7 +47,7 @@ pub struct MessageMeta {
     /// Unique numeric ID for this message.
     pub id: u32,
     /// 1-based position of this message within its cycle.
-    pub index: u32,
+    pub index: Option<u32>,
     /// Semantic tag, e.g. `"system_prompt_from_config"`, `"tool"`, `"rules"`.
     pub tag: Option<String>,
     /// `true` once the message has been sent to the LLM API.
