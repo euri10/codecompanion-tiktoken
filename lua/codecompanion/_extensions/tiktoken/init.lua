@@ -24,10 +24,11 @@ function Extension.setup(opts)
   --- @type table<integer, { tokens: integer, time_ms: integer, model: string }>
   local inline_snapshots = {}
 
-  --- Per-buffer snapshot taken at CodeCompanionToolStarted.
-  --- Tracks the token count before each tool runs so we can show the delta.
-  --- @type table<integer, { tokens: integer, time_ms: integer, tool_name: string }>
-  local tool_snapshots = {}
+  --- Per-buffer snapshot taken at CodeCompanionToolsStarted (the aggregate cycle event).
+  --- Tracks the token count and wall-clock time at the start of the whole tool cycle,
+  --- plus a running count of individual tools that have started within it.
+  --- @type table<integer, { tokens: integer, time_ms: integer, tool_count: integer }>
+  local tools_cycle_snapshots = {}
 
   --- Render a single llama.cpp-style stat line, now with estimated tokens.
   --- @param tokens integer
@@ -245,7 +246,7 @@ function Extension.setup(opts)
     callback = function(args)
       local bufnr = args.data and args.data.bufnr or 0
       request_snapshots[bufnr] = nil
-      tool_snapshots[bufnr] = nil
+      tools_cycle_snapshots[bufnr] = nil
     end,
   })
 
@@ -322,59 +323,75 @@ function Extension.setup(opts)
   })
 
   -- ---------------------------------------------------------------------------
-  -- CodeCompanionToolStarted
-  -- Snapshot the prompt token count right before a tool executes.  This lets
-  -- ToolFinished show how many tokens the tool output added to the context.
+  -- CodeCompanionToolsStarted
+  -- Fired once when the tool-execution system starts for a chat turn (may run
+  -- multiple individual tools sequentially).  We snapshot the token count and
+  -- wall-clock time here so ToolsFinished can show the aggregate delta.
   -- ---------------------------------------------------------------------------
   vim.api.nvim_create_autocmd("User", {
-    pattern = "CodeCompanionToolStarted",
+    pattern = "CodeCompanionToolsStarted",
     callback = function(args)
       local chat, bufnr = chat_from_args(args)
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
       local result = tiktoken.count_messages(chat.messages, model_name)
-      -- args.data may carry the tool name under different keys depending on plugin version.
-      local tool_name = (args.data and (args.data.tool_name or args.data.name or args.data.tool)) or "unknown tool"
-      tool_snapshots[bufnr] = {
-        tokens    = result.tokens,
-        time_ms   = vim.uv.now(),
-        tool_name = tool_name,
+      tools_cycle_snapshots[bufnr] = {
+        tokens     = result.tokens,
+        time_ms    = vim.uv.now(),
+        tool_count = 0,
       }
     end,
   })
 
   -- ---------------------------------------------------------------------------
-  -- CodeCompanionToolFinished
-  -- Compare token count to the ToolStarted snapshot.  A positive delta means
-  -- the tool appended content to the conversation context.
+  -- CodeCompanionToolStarted
+  -- Fired for each individual tool within the cycle.  We only increment the
+  -- counter here — no notification to avoid per-tool spam.
   -- ---------------------------------------------------------------------------
   vim.api.nvim_create_autocmd("User", {
-    pattern = "CodeCompanionToolFinished",
+    pattern = "CodeCompanionToolStarted",
+    callback = function(args)
+      local _, bufnr = chat_from_args(args)
+      local snap = tools_cycle_snapshots[bufnr]
+      if snap then
+        snap.tool_count = snap.tool_count + 1
+      end
+    end,
+  })
+
+  -- CodeCompanionToolFinished — intentionally silent; summary shown at ToolsFinished.
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionToolsFinished
+  -- Fired once after all tools in the cycle have completed.  Shows a single
+  -- aggregate notification: total context delta, elapsed time, and tool count.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionToolsFinished",
     callback = function(args)
       local chat, bufnr = chat_from_args(args)
-      local snap = tool_snapshots[bufnr]
-      tool_snapshots[bufnr] = nil
+      local snap = tools_cycle_snapshots[bufnr]
+      tools_cycle_snapshots[bufnr] = nil
 
       if not chat then return end
       local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
       local result = tiktoken.count_messages(chat.messages, model_name)
 
-      local tool_name = (snap and snap.tool_name)
-        or (args.data and (args.data.tool_name or args.data.name or args.data.tool))
-        or "unknown tool"
+      local tool_count = snap and snap.tool_count or 0
+      local tool_label = tool_count == 1 and "1 tool" or string.format("%d tools", tool_count)
 
       local info_lines = {
         "-------------------------------",
-        string.format("⊛ %s  [tool: %s]", model_name, tool_name),
-        string.format("≈ %d tokens  (context after tool)", result.tokens),
+        string.format("⊛ %s  [tools done — %s]", model_name, tool_label),
+        string.format("≈ %d tokens  (context after tools)", result.tokens),
       }
 
       if snap then
         local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
         local delta = result.tokens - snap.tokens
-        local sign = delta >= 0 and "+" or ""
+        local sign  = delta >= 0 and "+" or ""
         table.insert(info_lines, string.format(
-          "Δ %s%d tokens  ⊙ %.2fs  (tool output)",
+          "Δ %s%d tokens  ⊙ %.2fs  (tool cycle output)",
           sign, delta, wall_elapsed_s
         ))
       end
@@ -383,7 +400,7 @@ function Extension.setup(opts)
       vim.notify(
         table.concat(info_lines, "\n"),
         vim.log.levels.INFO,
-        { title = "Token Breakdown (tool)" }
+        { title = "Token Breakdown (tools)" }
       )
     end,
   })
