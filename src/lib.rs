@@ -107,10 +107,16 @@ pub struct MessageTools {
 ///
 /// Mirrors the Lua table shape verbatim so the token-counting path can work
 /// directly on the deserialized type.
+///
+/// `_meta` is declared `Option` because some messages injected by the plugin
+/// (e.g. tool-system prompts in older versions) may omit the field entirely.
+/// All token-counting logic operates on `role`, `content`, and `tools`, so
+/// the absence of metadata never affects the count.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Message {
-    #[serde(rename = "_meta")]
-    pub meta: MessageMeta,
+    /// Metadata block — absent on some internally-synthesised messages.
+    #[serde(rename = "_meta", default)]
+    pub meta: Option<MessageMeta>,
     /// Text body of the message.  Absent on pure tool-dispatch LLM turns.
     pub content: Option<String>,
     /// Absent on messages that pre-date the `opts` field or are synthesised
