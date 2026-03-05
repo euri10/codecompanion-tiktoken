@@ -20,15 +20,45 @@ function Extension.setup(opts)
   --- @type table<integer, { tokens: integer, time_ms: integer }>
   local request_snapshots = {}
 
-  --- Render a single llama.cpp-style stat line.
+  --- Render a single llama.cpp-style stat line, now with estimated tokens.
   --- @param tokens integer
   --- @param elapsed_s number
   --- @param tps number
   --- @param label string  e.g. "prompt" or "generation"
+  --- @param estimated_tokens integer|nil
   --- @return string
-  local function stat_line(tokens, elapsed_s, tps, label)
-    return string.format("≈ %d tokens  ⊙ %.2fs  ↺ %.2f t/s  (%s)", tokens, elapsed_s, tps, label)
+  local function stat_line(tokens, elapsed_s, tps, label, estimated_tokens)
+    if estimated_tokens and estimated_tokens > 0 then
+      return string.format("≈ %d tokens (est: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)", tokens, estimated_tokens, elapsed_s, tps, label)
+    else
+      return string.format("≈ %d tokens  ⊙ %.2fs  ↺ %.2f t/s  (%s)", tokens, elapsed_s, tps, label)
+    end
   end
+
+  --- Retrieve the chat object from event data, returning nil silently on failure.
+  --- @param args table  autocmd callback args
+  --- @return table|nil
+  local function chat_from_args(args)
+    local bufnr = args.data and args.data.bufnr or 0
+    return require("codecompanion").buf_get_chat(bufnr), bufnr
+  end
+
+  --- Count tokens for the current message list and show a prompt-only notification.
+  --- @param chat table  CodeCompanion chat object
+  --- @param label string  event label for the header line
+  local function notify_prompt_tokens(chat, label)
+    local model_name = chat.adapter and chat.adapter.model and chat.adapter.model.name or "unknown"
+    --- @type { tokens: integer, elapsed_ms: number, tokens_per_sec: number, estimated_tokens: integer|nil }
+    local result = tiktoken.count_messages(chat.messages, model_name)
+    local lines = {
+      "-------------------------------",
+      string.format("⊛ %s  [%s]", model_name, label),
+      stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
+      "-------------------------------",
+    }
+    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
+  end
+
 
   --- Retrieve the chat object from event data, returning nil silently on failure.
   --- @param args table  autocmd callback args
@@ -133,7 +163,7 @@ function Extension.setup(opts)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [done]", model_name),
-        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt"),
+        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
       }
       local snap = request_snapshots[bufnr]
       if snap then
@@ -169,7 +199,7 @@ function Extension.setup(opts)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [stopped]", model_name),
-        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt"),
+        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.estimated_tokens),
       }
       if snap then
         local wall_elapsed_s = (vim.uv.now() - snap.time_ms) / 1000.0
