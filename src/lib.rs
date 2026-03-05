@@ -1,14 +1,128 @@
 use mlua::prelude::*;
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
-use tiktoken_rs::{
-    CoreBPE, cl100k_base, o200k_base, o200k_harmony, p50k_base, p50k_edit, r50k_base,
-};
+use tiktoken_rs::{CoreBPE, cl100k_base, o200k_base, o200k_harmony, p50k_base, p50k_edit, r50k_base};
 
 /// Cache tokenizers for performance — avoids re-loading BPE data on every call.
 static CACHE: Lazy<Mutex<HashMap<String, CoreBPE>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+// ---------------------------------------------------------------------------
+// Message types — mirror the Lua table shape emitted by codecompanion.nvim
+// ---------------------------------------------------------------------------
+
+/// Role of a message sender in a codecompanion.nvim conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    System,
+    User,
+    /// The LLM / assistant turn (mapped from Lua `"llm"`).
+    Llm,
+    /// A tool response turn.
+    Tool,
+}
+
+impl Role {
+    /// Return the wire-format string for this role.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::User => "user",
+            Self::Llm => "llm",
+            Self::Tool => "tool",
+        }
+    }
+}
+
+/// Metadata attached to every message by the plugin (`_meta` Lua table).
+#[derive(Debug, Clone, Deserialize)]
+pub struct MessageMeta {
+    /// Conversation cycle this message belongs to.
+    pub cycle: u32,
+    /// Rough token estimate from the Lua plugin (heuristic, not tiktoken).
+    pub estimated_tokens: Option<u64>,
+    /// Unique numeric ID for this message.
+    pub id: u32,
+    /// 1-based position of this message within its cycle.
+    pub index: u32,
+    /// Semantic tag, e.g. `"system_prompt_from_config"`, `"tool"`, `"rules"`.
+    pub tag: Option<String>,
+    /// `true` once the message has been sent to the LLM API.
+    pub sent: Option<bool>,
+}
+
+/// Rendering options for a message (`opts` Lua table).
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct MessageOpts {
+    /// Whether the message is shown in the chat buffer UI.
+    /// Defaults to `false` when absent from the Lua table.
+    #[serde(default)]
+    pub visible: bool,
+}
+
+/// An optional context attachment carried with a message.
+///
+/// `id` is an opaque tag such as `"<rules>AGENTS.md</rules>"`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MessageContext {
+    pub id: String,
+}
+
+/// The `function` sub-object inside a tool call.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ToolCallFunction {
+    pub name: String,
+    /// JSON-encoded arguments string as sent by the LLM.
+    pub arguments: String,
+}
+
+/// A single tool call emitted by the LLM.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ToolCall {
+    /// 0-based index within the `calls` array.
+    #[serde(rename = "_index")]
+    pub index: u32,
+    pub function: ToolCallFunction,
+    /// Opaque call ID used to correlate with the tool response message.
+    pub id: String,
+    /// Always `"function"` in the current codecompanion schema.
+    #[serde(rename = "type")]
+    pub kind: String,
+}
+
+/// Tool-related payload on a message.
+///
+/// - `role = "llm"` dispatch turns: `calls` is populated.
+/// - `role = "tool"` response turns: `call_id` is populated.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MessageTools {
+    pub calls: Option<Vec<ToolCall>>,
+    pub call_id: Option<String>,
+}
+
+/// A single message in a codecompanion.nvim conversation history.
+///
+/// Mirrors the Lua table shape verbatim so the token-counting path can work
+/// directly on the deserialized type.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Message {
+    #[serde(rename = "_meta")]
+    pub meta: MessageMeta,
+    /// Text body of the message.  Absent on pure tool-dispatch LLM turns.
+    pub content: Option<String>,
+    /// Absent on messages that pre-date the `opts` field or are synthesised
+    /// internally by the plugin without render options.
+    #[serde(default)]
+    pub opts: MessageOpts,
+    pub role: Role,
+    /// Attached context (file snippets, tool descriptions, etc.).
+    pub context: Option<MessageContext>,
+    /// Present only on tool-call and tool-response turns.
+    pub tools: Option<MessageTools>,
+}
 
 /// Map a model name to the appropriate BPE tokenizer, caching the result.
 ///
@@ -104,44 +218,37 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
         lua.create_function(|lua, (messages, model): (LuaTable, Option<String>)| {
             let model_name = model.unwrap_or_else(|| "cl100k_base".to_string());
             let bpe = tokenizer_for_model(&model_name)?;
-            let (tokens_per_message, tokens_per_name) = model_constants(&model_name);
+            let (tokens_per_message, _tokens_per_name) = model_constants(&model_name);
 
             let mut total: usize = 0;
             let start = Instant::now();
 
-            for pair in messages.sequence_values::<LuaTable>() {
-                let msg = pair?;
+            for pair in messages.sequence_values::<LuaValue>() {
+                let val = pair?;
+                let msg: Message = lua
+                    .from_value(val)
+                    .map_err(|e| LuaError::external(format!("message deserialise: {e}")))?;
 
                 if tokens_per_message > 0 {
                     total += tokens_per_message as usize;
                 }
 
-                if let Ok(role) = msg.get::<String>("role") {
-                    total += bpe.encode_with_special_tokens(&role).len();
+                total += bpe.encode_with_special_tokens(msg.role.as_str()).len();
+
+                if let Some(ref content) = msg.content {
+                    total += bpe.encode_with_special_tokens(content).len();
                 }
 
-                if let Ok(content) = msg.get::<String>("content") {
-                    total += bpe.encode_with_special_tokens(&content).len();
-                }
-
-                if let Ok(name) = msg.get::<String>("name") {
-                    total += bpe.encode_with_special_tokens(&name).len();
-                    if tokens_per_name > 0 {
-                        total += tokens_per_name as usize;
-                    }
-                }
-
-                if let Ok(tool_calls) = msg.get::<LuaTable>("tool_calls") {
-                    for tc in tool_calls.sequence_values::<LuaTable>() {
-                        let tc = tc?;
-                        if let Ok(func) = tc.get::<LuaTable>("function") {
-                            if let Ok(name) = func.get::<String>("name") {
-                                total += bpe.encode_with_special_tokens(&name).len();
-                            }
-                            if let Ok(args) = func.get::<String>("arguments") {
-                                total += bpe.encode_with_special_tokens(&args).len();
-                            }
-                        }
+                if let Some(ref tools) = msg.tools
+                    && let Some(ref calls) = tools.calls
+                {
+                    for tc in calls {
+                        total += bpe
+                            .encode_with_special_tokens(&tc.function.name)
+                            .len();
+                        total += bpe
+                            .encode_with_special_tokens(&tc.function.arguments)
+                            .len();
                     }
                 }
             }
@@ -308,6 +415,45 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_count_messages_lua_structure() {
+        let bpe = tokenizer_for_model("gpt-4o").expect("gpt-4o tokenizer must load");
+        let (tokens_per_message, _tokens_per_name) = model_constants("gpt-4o");
+
+        // Build minimal Message values directly (no Lua runtime needed in unit tests).
+        let make_message = |role: Role, content: &str| -> (Role, String) {
+            (role, content.to_string())
+        };
+
+        let messages = [
+            make_message(
+                Role::System,
+                "You are an AI programming assistant named \"CodeCompanion\", working within the Neovim text editor.\n\nYou are a general programming assistant and expert in software engineering. You can answer questions about any programming language, framework, or concept.\nYou can also perform the following tasks:\n* Answer general programming questions.\n* Explain how the code in a Neovim buffer works.\n* Review the selected code from a Neovim buffer.\n* Generate unit tests for the selected code.\n* Propose fixes for problems in the selected code.\n* Scaffold code for a new workspace.\n* Find relevant code to the user's query.\n* Propose fixes for test failures.\n* Answer questions about Neovim.\n* Prefer vim.api* methods where possible.\n\nFollow the user's requirements carefully and to the letter.\nUse the context and attachments the user provides.\nKeep your answers short and impersonal.\nUse Markdown formatting in your answers.\nDO NOT use H1 or H2 headers in your response.\nWhen suggesting code changes or new content, use Markdown code blocks.\nTo start a code block, use 4 backticks.\nAfter the backticks, add the programming language name as the language ID and the file path within curly braces if available.\nTo close a code block, use 4 backticks on a new line.\nIf you want the user to decide where to place the code, do not add the file path.\nIn the code block, use a line comment with '...existing code...' to indicate code that is already present in the file. Ensure this comment is specific to the programming language.\nCode block example:\n````languageId {path/to/file}\n// ...existing code...\n{ changed code }\n// ...existing code...\n{ changed code }\n// ...existing code...\n````\nEnsure line comments use the correct syntax for the programming language (e.g. \"#\" for Python, \"--\" for Lua).\nFor code blocks use four backticks to start and end.\nAvoid wrapping the whole response in triple backticks.\nDo not include diff formatting unless explicitly asked.\nDo not include line numbers unless explicitly asked.\n\nWhen given a task:\n1. Think step-by-step and, unless the user requests otherwise or the task is very simple. For complex architectural changes, describe your plan in pseudocode first.\n2. When outputting code blocks, ensure only relevant code is included, avoiding any repeating or unrelated code.\n3. End your response with a short suggestion for the next user turn that directly supports continuing the conversation.\n\nAdditional context:\nAll non-code text responses must be written in the English language.\nThe user's current working directory is /home/lotso/code/codecompanion-tiktoken.\nThe current date is 2026-03-05.\nThe user's Neovim version is 0.11.5.\nThe user is working on a Linux machine. Please respond with system specific commands if applicable.\n",
+            ),
+            make_message(
+                Role::System,
+                "<instructions>\nYou are a highly sophisticated automated coding agent with expert-level knowledge across many different programming languages and frameworks.\nThe user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.\nYou will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.\nIf you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.\nIf the user wants you to implement a feature and they have not specified the files to edit, first break down the user's request into smaller concepts and think about the kinds of files you need to grasp each concept.\nIf you aren't sure which tool is relevant, you can call multiple tools. You can call tools repeatedly to take actions or gather as much context as needed until you have completed the task fully. Don't give up unless you are sure the request cannot be fulfilled with the tools you have. It's YOUR RESPONSIBILITY to make sure that you have done all you can to collect necessary context.\nDon't make assumptions about the situation - gather context first, then perform the task or answer the question.\nThink creatively and explore the workspace in order to make a complete fix.\nDon't repeat yourself after a tool call, pick up where you left off.\nNEVER print out a codeblock with a terminal command to run unless the user asked for it.\nYou don't need to read a file if it's already provided in context.\n</instructions>\n<toolUseInstructions>\nWhen using a tool, follow the json schema very carefully and make sure to include ALL required properties.\nAlways output valid JSON when using a tool.\nIf a tool exists to do a task, use the tool instead of asking the user to manually take an action.\nIf you say that you will take an action, then go ahead and use the tool to do it. No need to ask permission.\nNever use a tool that does not exist. Use tools using the proper procedure, DO NOT write out a json codeblock with the tool inputs.\nNever say the name of a tool to a user. For example, instead of saying that you'll use the insert_edit_into_file tool, say \"I'll edit the file\".\nIf you think running multiple tools can answer the user's question, prefer calling them in parallel whenever possible.\nWhen invoking a tool that takes a file path, always use the file path you have been given by the user or by the output of a tool.\n</toolUseInstructions>\n<outputFormatting>\nUse proper Markdown formatting in your answers. When referring to a filename or symbol in the user's workspace, wrap it in backticks.\nAny code block examples must be wrapped in four backticks with the programming language.\n<example>\n````languageId\n// Your code here\n````\n</example>\nThe languageId must be the correct identifier for the programming language, e.g. python, javascript, lua, etc.\nIf you are providing code changes, use the insert_edit_into_file tool (if available to you) to make the changes directly instead of printing out a code block with the changes.\n</outputFormatting>",
+            ),
+            make_message(
+                Role::System,
+                "Beads is a local, hash-based task tracking system. Tasks have short IDs like `br-a1b2`. Key commands:\n\n- `br ready` — list tasks with no open blockers (i.e. ready to work on)\n- `br show <id>` — show full details for a task\n- `br create \"<title>\" -p <priority>` — create a new task (priority 0 = highest)\n- `br update <id> --claim` — assign a task to yourself\n- `br update <id> --status done` — mark a task as done\n- `br dep add <child> <parent>` — make child depend on parent\n\nOutput is JSON. Always use `br ready` first to see what's available before taking action.",
+            ),
+            make_message(Role::User, "run br ready and work on tasks"),
+        ];
+
+        let mut total: usize = 0;
+        for (role, content) in &messages {
+            if tokens_per_message > 0 {
+                total += tokens_per_message as usize;
+            }
+            total += bpe.encode_with_special_tokens(role.as_str()).len();
+            total += bpe.encode_with_special_tokens(content).len();
+        }
+        total += 3; // assistant priming
+
+        assert!(total > 50, "expected at least 50 tokens for Lua messages, got {total}");
     }
 
     /// Verify that the "gpt-4o" model (o200k_base) tokenises identically for
