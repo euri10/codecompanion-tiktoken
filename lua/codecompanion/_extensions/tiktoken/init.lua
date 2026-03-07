@@ -10,22 +10,21 @@ function Extension.setup(opts)
 
   --- Whether vim.notify notifications from this extension are enabled.
   --- Toggle with `gtt` or `require("codecompanion").extensions.tiktoken.toggle_notify()`.
-  --- Initialised from `opts.notify` (default: true).
+  --- Initialised from `opts.notify` (default: false).
   --- @type boolean
   local notify_enabled = opts.notify ~= false
-
+  local count_tokens_action = {
+    modes = {
+      n = "gtt", -- Normal mode keymap: gtt = "get count tokens"
+    },
+    description = "Toggle tiktoken count notifications",
+    callback = function(_chat)
+	    notify_enabled = not notify_enabled
+    end,
+  }
   --- Toggle the notification flag and echo the new state.
-  local function toggle_notify()
-    notify_enabled = not notify_enabled
-    local state = notify_enabled and "ON" or "OFF"
-    vim.api.nvim_echo({ { "[tiktoken] token notifications " .. state, "MoreMsg" } }, true, {})
-  end
-
-  vim.keymap.set("n", "gtt", toggle_notify, {
-    desc = "[tiktoken] Toggle token-count notifications",
-    noremap = true,
-    silent = true,
-  })
+  local chat_keymaps = require("codecompanion.config").interactions.chat.keymaps
+  chat_keymaps.count_tokens = count_tokens_action
 
   -- Verify Rust module loaded correctly.
   if not tiktoken.count_text then
