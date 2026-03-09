@@ -122,8 +122,8 @@ function Extension.setup(opts)
         local pct = math.floor(row.value / total * 100 + 0.5)
         local bar_width = math.max(1, math.floor((row.value / total) * 16 + 0.5))
         local bar = string.rep("▰", bar_width)
-        table.insert(lines, string.format("    %s %-10s %5d  %3d%%  %s", row.icon, row.label, row.value, pct, bar))
-        -- Insert system submount immediately after system row
+        table.insert(lines, string.format("    %s %-28s %5d  %3d%%  %s", row.icon, row.label, row.value, pct, bar))
+        -- Insert system submount entries immediately after system row, aligned
         if row.is_system and tags then
           local tag_rows = {}
           for tag, count in pairs(tags) do
@@ -135,7 +135,6 @@ function Extension.setup(opts)
             return a.value > b.value
           end)
           if #tag_rows > 0 and system_total > 0 then
-            table.insert(lines, "  system submount")
             for _, trow in ipairs(tag_rows) do
               local tpct = math.floor(trow.value / system_total * 100 + 0.5)
               local short_label = trow.label
