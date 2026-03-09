@@ -109,7 +109,7 @@ function Extension.setup(opts)
     local overhead = breakdown.overhead or 0
 
     local rows = {
-      { label = "system", value = system_total, icon = "◉" },
+      { label = "system", value = system_total, icon = "◉", is_system = true },
       { label = "user", value = user, icon = "👤" },
       { label = "assistant", value = assistant, icon = "✦" },
       { label = "tool", value = tool, icon = "🛠" },
@@ -121,49 +121,53 @@ function Extension.setup(opts)
       if row.value > 0 then
         local pct = math.floor(row.value / total * 100 + 0.5)
         local bar_width = math.max(1, math.floor((row.value / total) * 16 + 0.5))
-        local bar = string.rep("█", bar_width)
+        local bar = string.rep("▰", bar_width)
         table.insert(lines, string.format("    %s %-10s %5d  %3d%%  %s", row.icon, row.label, row.value, pct, bar))
-      end
-    end
-
-    if tags then
-      local tag_rows = {}
-      for tag, count in pairs(tags) do
-        if count > 0 then
-          table.insert(tag_rows, { label = tag, value = count })
-        end
-      end
-      table.sort(tag_rows, function(a, b)
-        return a.value > b.value
-      end)
-      if #tag_rows > 0 and system_total > 0 then
-        table.insert(lines, "  system submount")
-        for _, row in ipairs(tag_rows) do
-          local pct = math.floor(row.value / system_total * 100 + 0.5)
-          local short_label = row.label
-          if #short_label > 28 then
-            short_label = short_label:sub(1, 25) .. "..."
+        -- Insert system submount immediately after system row
+        if row.is_system and tags then
+          local tag_rows = {}
+          for tag, count in pairs(tags) do
+            if count > 0 then
+              table.insert(tag_rows, { label = tag, value = count })
+            end
           end
-          local bar_width = math.max(1, math.floor((row.value / system_total) * 14 + 0.5))
-          local bar = string.rep("▰", bar_width)
-          table.insert(lines, string.format("    ↳ %-28s %5d  %3d%%  %s", short_label, row.value, pct, bar))
+          table.sort(tag_rows, function(a, b)
+            return a.value > b.value
+          end)
+          if #tag_rows > 0 and system_total > 0 then
+            table.insert(lines, "  system submount")
+            for _, trow in ipairs(tag_rows) do
+              local tpct = math.floor(trow.value / system_total * 100 + 0.5)
+              local short_label = trow.label
+              if #short_label > 28 then
+                short_label = short_label:sub(1, 25) .. "..."
+              end
+              local tbar_width = math.max(1, math.floor((trow.value / system_total) * 14 + 0.5))
+              local tbar = string.rep("▰", tbar_width)
+              table.insert(lines, string.format("    ↳ %-28s %5d  %3d%%  %s", short_label, trow.value, tpct, tbar))
+            end
+          end
         end
       end
     end
-
     return lines
   end
 
 
   --- @param tokens integer
-  --- @param elapsed_s number
-  --- @param tps number
+  --- @param speed table|number
   --- @param label string  e.g. "prompt" or "generation"
   --- @param total_estimated integer|nil
   --- @return string
   local function stat_line(tokens, speed, label, total_estimated)
-    local elapsed_s = (speed.elapsed_ms or 0) / 1000.0
-    local tps = speed.tokens_per_sec or 0
+    local elapsed_s, tps
+    if type(speed) == "table" then
+      elapsed_s = (speed.elapsed_ms or 0) / 1000.0
+      tps = speed.tokens_per_sec or 0
+    else
+      elapsed_s = 0
+      tps = 0
+    end
     local est_num = tonumber(total_estimated)
     if est_num and est_num > 0 then
       return string.format(
