@@ -213,7 +213,7 @@ fn model_constants(model: &str) -> (isize, isize) {
 fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
 
-    // Count raw text tokens
+    // Count raw text tokens.
     let count_text = lua.create_function(|_, (text, model): (String, Option<String>)| {
         let model_name = model.unwrap_or_else(|| "cl100k_base".to_string());
         let bpe = tokenizer_for_model(&model_name)?;
@@ -315,26 +315,45 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
                 0.0
             };
 
-            // Build the breakdown sub-table.
+            // Build the hierarchical breakdown table.
             let breakdown = lua.create_table()?;
-            breakdown.set("system", bucket_system)?;
+            let system_table = lua.create_table()?;
+            system_table.set("total", bucket_system)?;
+            let tags_table = lua.create_table()?;
+            for (tag, count) in &system_tags {
+                tags_table.set(tag.as_str(), *count)?;
+            }
+            system_table.set("tags", tags_table)?;
+            breakdown.set("system", system_table)?;
             breakdown.set("user", bucket_user)?;
             breakdown.set("assistant", bucket_assistant)?;
             breakdown.set("tool", bucket_tool)?;
             breakdown.set("overhead", bucket_overhead)?;
 
-            let tags_table = lua.create_table()?;
-            for (tag, count) in &system_tags {
-                tags_table.set(tag.as_str(), *count)?;
-            }
-            breakdown.set("system_tags", tags_table)?;
+            // Flat summary table for quick inspection
+            let summary = lua.create_table()?;
+            summary.set("system", bucket_system)?;
+            summary.set("user", bucket_user)?;
+            summary.set("assistant", bucket_assistant)?;
+            summary.set("tool", bucket_tool)?;
+            summary.set("overhead", bucket_overhead)?;
+            summary.set("total", total)?;
+
+            // Speed/performance table
+            let speed = lua.create_table()?;
+            speed.set("elapsed_ms", elapsed_ms)?;
+            speed.set("tokens_per_sec", tokens_per_sec)?;
+            speed.set(
+                "human",
+                format!("{:.2} ms, {:.1} tokens/sec", elapsed_ms, tokens_per_sec),
+            )?;
 
             let result = lua.create_table()?;
             result.set("tokens", total)?;
-            result.set("elapsed_ms", elapsed_ms)?;
-            result.set("tokens_per_sec", tokens_per_sec)?;
+            result.set("speed", speed)?;
             result.set("total_estimated", estimated_tokens_sum)?;
             result.set("breakdown", breakdown)?;
+            result.set("summary", summary)?;
             Ok(result)
         })?;
 

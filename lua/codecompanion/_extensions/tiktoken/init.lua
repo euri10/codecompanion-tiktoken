@@ -8,11 +8,15 @@ local Extension = {}
 function Extension.setup(opts)
   local tiktoken = require("tiktoken")
 
-  --- Whether vim.notify notifications from this extension are enabled.
-  --- Toggle with `gtt` or `require("codecompanion").extensions.tiktoken.toggle_notify()`.
+  --- Whether vim.notify notifications from this extension are enabled (legacy, for backward compatibility).
   --- Initialised from `opts.notify` (default: false).
   --- @type boolean
   local notify_enabled = opts and opts.notify ~= false
+
+  --- Display mode for token breakdown notifications/statusline.
+  --- Initialised from `opts.display_mode` (default: 'notification').
+  --- @type string
+  local display_mode = (opts and opts.display_mode) or 'notification'
 
   --- Toggle tiktoken notifications and return the new state.
   local function toggle_notify()
@@ -37,7 +41,7 @@ function Extension.setup(opts)
   chat_keymaps.count_tokens = count_tokens_action
 
   -- Verify Rust module loaded correctly.
-  if not tiktoken.count_text then
+  if not tiktoken.count_messages then
     vim.notify("Error: tiktoken Rust module not loaded correctly", vim.log.levels.ERROR)
     return
   end
@@ -90,29 +94,38 @@ function Extension.setup(opts)
   --- @param breakdown table  The `breakdown` sub-table returned by `count_messages`
   --- @param total integer    Grand total token count for percentage calculation
   --- @return string[]        Extra lines to append before the closing separator
-  local function format_breakdown(breakdown, total)
+  local function format_breakdown(breakdown, total, adapter)
     if not breakdown or total == 0 then
       return {}
     end
 
+    local lines = {}
+    local system = breakdown.system or {}
+    local system_total = system.total or 0
+    local tags = system.tags
+    local user = breakdown.user or 0
+    local assistant = breakdown.assistant or 0
+    local tool = breakdown.tool or 0
+    local overhead = breakdown.overhead or 0
+
     local rows = {
-      { label = "system", value = breakdown.system or 0 },
-      { label = "user", value = breakdown.user or 0 },
-      { label = "assistant", value = breakdown.assistant or 0 },
-      { label = "tool", value = breakdown.tool or 0 },
-      { label = "overhead", value = breakdown.overhead or 0 },
+      { label = "system", value = system_total, icon = "◉" },
+      { label = "user", value = user, icon = "👤" },
+      { label = "assistant", value = assistant, icon = "✦" },
+      { label = "tool", value = tool, icon = "🛠" },
+      { label = "overhead", value = overhead, icon = "⟡" },
     }
 
-    local lines = {}
+    table.insert(lines, "  breakdown")
     for _, row in ipairs(rows) do
       if row.value > 0 then
         local pct = math.floor(row.value / total * 100 + 0.5)
-        table.insert(lines, string.format("  %-9s │ %5d  (%d%%)", row.label, row.value, pct))
+        local bar_width = math.max(1, math.floor((row.value / total) * 16 + 0.5))
+        local bar = string.rep("█", bar_width)
+        table.insert(lines, string.format("    %s %-10s %5d  %3d%%  %s", row.icon, row.label, row.value, pct, bar))
       end
     end
 
-    -- System sub-tag breakdown (only if ≥2 distinct tags)
-    local tags = breakdown.system_tags
     if tags then
       local tag_rows = {}
       for tag, count in pairs(tags) do
@@ -123,11 +136,17 @@ function Extension.setup(opts)
       table.sort(tag_rows, function(a, b)
         return a.value > b.value
       end)
-      if #tag_rows >= 2 then
-        table.insert(lines, "  system breakdown:")
+      if #tag_rows > 0 and system_total > 0 then
+        table.insert(lines, "  system submount")
         for _, row in ipairs(tag_rows) do
-          local pct = math.floor(row.value / (breakdown.system or 1) * 100 + 0.5)
-          table.insert(lines, string.format("    %-28s │ %5d  (%d%%)", row.label, row.value, pct))
+          local pct = math.floor(row.value / system_total * 100 + 0.5)
+          local short_label = row.label
+          if #short_label > 28 then
+            short_label = short_label:sub(1, 25) .. "..."
+          end
+          local bar_width = math.max(1, math.floor((row.value / system_total) * 14 + 0.5))
+          local bar = string.rep("▰", bar_width)
+          table.insert(lines, string.format("    ↳ %-28s %5d  %3d%%  %s", short_label, row.value, pct, bar))
         end
       end
     end
@@ -135,18 +154,22 @@ function Extension.setup(opts)
     return lines
   end
 
+
   --- @param tokens integer
   --- @param elapsed_s number
   --- @param tps number
   --- @param label string  e.g. "prompt" or "generation"
   --- @param total_estimated integer|nil
   --- @return string
-  local function stat_line(tokens, elapsed_s, tps, label, total_estimated)
-    if total_estimated and total_estimated > 0 then
+  local function stat_line(tokens, speed, label, total_estimated)
+    local elapsed_s = (speed.elapsed_ms or 0) / 1000.0
+    local tps = speed.tokens_per_sec or 0
+    local est_num = tonumber(total_estimated)
+    if est_num and est_num > 0 then
       return string.format(
-        "≈ %d tokens (heuristic total: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)",
+        "≈ %d tokens (total_estimated: %d)  ⊙ %.2fs  ↺ %.2f t/s  (%s)",
         tokens,
-        total_estimated,
+        est_num,
         elapsed_s,
         tps,
         label
@@ -175,9 +198,9 @@ function Extension.setup(opts)
     local lines = {
       "-------------------------------",
       string.format("⊛ %s  [%s]", model_name, label),
-      stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.total_estimated),
+      stat_line(result.tokens, result.speed, "prompt", result.total_estimated),
     }
-    for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
+    for _, l in ipairs(format_breakdown(result.breakdown, result.tokens, chat.adapter)) do
       table.insert(lines, l)
     end
     table.insert(lines, "-------------------------------")
@@ -257,6 +280,7 @@ function Extension.setup(opts)
       local result = tiktoken.count_messages(chat.messages, model_name)
       request_snapshots[bufnr] = {
         tokens = result.tokens,
+        -- vim.loop.hrtime is available in Neovim >=0.8
         time_ms = math.floor(vim.loop.hrtime() / 1e6),
         is_streaming = false,
       }
@@ -286,6 +310,7 @@ function Extension.setup(opts)
         local result = tiktoken.count_messages(chat.messages, model_name)
         request_snapshots[bufnr] = {
           tokens = result.tokens,
+          -- vim.loop.hrtime is available in Neovim >=0.8
           time_ms = math.floor(vim.loop.hrtime() / 1e6),
           is_streaming = true,
         }
@@ -313,9 +338,9 @@ function Extension.setup(opts)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [done]", model_name),
-        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.total_estimated),
+        stat_line(result.tokens, result.speed, "prompt", result.total_estimated),
       }
-      for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
+      for _, l in ipairs(format_breakdown(result.breakdown, result.tokens, chat.adapter)) do
         table.insert(lines, l)
       end
       local snap = request_snapshots[bufnr]
@@ -357,9 +382,9 @@ function Extension.setup(opts)
       local lines = {
         "-------------------------------",
         string.format("⊛ %s  [stopped]", model_name),
-        stat_line(result.tokens, result.elapsed_ms / 1000.0, result.tokens_per_sec, "prompt", result.total_estimated),
+        stat_line(result.tokens, result.speed, "prompt", result.total_estimated),
       }
-      for _, l in ipairs(format_breakdown(result.breakdown, result.tokens)) do
+      for _, l in ipairs(format_breakdown(result.breakdown, result.tokens, chat.adapter)) do
         table.insert(lines, l)
       end
       if snap then
@@ -436,6 +461,7 @@ function Extension.setup(opts)
               vim.log.levels.WARN
             )
           end
+
         end
       end)
     end,
@@ -458,6 +484,7 @@ function Extension.setup(opts)
       local token_count = tiktoken.count_text(content, model_name)
       inline_snapshots[bufnr] = {
         tokens = token_count,
+        -- vim.loop.hrtime is available in Neovim >=0.8
         time_ms = math.floor(vim.loop.hrtime() / 1e6),
         model = model_name,
       }
@@ -501,8 +528,13 @@ function Extension.setup(opts)
       end
 
       table.insert(info_lines, "-------------------------------")
-      if notify_enabled then
-        vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (inline)" })
+      if display_mode == 'notification' then
+        if notify_enabled then
+          vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (inline)" })
+        end
+      elseif display_mode == 'statusline' then
+        _G.tiktoken_statusline_message = table.concat(info_lines, " | ")
+        vim.cmd('redrawstatus')
       end
     end,
   })
@@ -524,6 +556,7 @@ function Extension.setup(opts)
       local result = tiktoken.count_messages(chat.messages, model_name)
       tools_cycle_snapshots[bufnr] = {
         tokens = result.tokens,
+        -- vim.loop.hrtime is available in Neovim >=0.8
         time_ms = math.floor(vim.loop.hrtime() / 1e6),
         tool_count = 0,
       }
@@ -586,8 +619,13 @@ function Extension.setup(opts)
       end
 
       table.insert(info_lines, "-------------------------------")
-      if notify_enabled then
-        vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (tools)" })
+      if display_mode == 'notification' then
+        if notify_enabled then
+          vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (tools)" })
+        end
+      elseif display_mode == 'statusline' then
+        _G.tiktoken_statusline_message = table.concat(info_lines, " | ")
+        vim.cmd('redrawstatus')
       end
     end,
   })
