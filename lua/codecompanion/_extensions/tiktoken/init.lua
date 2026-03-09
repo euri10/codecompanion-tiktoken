@@ -16,7 +16,7 @@ function Extension.setup(opts)
   --- Display mode for token breakdown notifications/statusline.
   --- Initialised from `opts.display_mode` (default: 'notification').
   --- @type string
-  local display_mode = (opts and opts.display_mode) or 'notification'
+  local display_mode = (opts and opts.display_mode) or "notification"
 
   --- Toggle tiktoken notifications and return the new state.
   local function toggle_notify()
@@ -110,9 +110,9 @@ function Extension.setup(opts)
 
     local rows = {
       { label = "system", value = system_total, icon = "◉", is_system = true },
-      { label = "user", value = user, icon = "👤" },
+      { label = "user", value = user, icon = "👤", wide = true },
       { label = "assistant", value = assistant, icon = "✦" },
-      { label = "tool", value = tool, icon = "🛠" },
+      { label = "tool", value = tool, icon = "🛠", wide = true },
       { label = "overhead", value = overhead, icon = "⟡" },
     }
 
@@ -122,7 +122,11 @@ function Extension.setup(opts)
         local pct = math.floor(row.value / total * 100 + 0.5)
         local bar_width = math.max(1, math.floor((row.value / total) * 16 + 0.5))
         local bar = string.rep("▰", bar_width)
-        table.insert(lines, string.format("    %s %-28s %5d  %3d%%  %s", row.icon, row.label, row.value, pct, bar))
+        -- Double-width emoji icons (👤, 🛠) occupy 2 terminal columns, so
+        -- reduce the label field by 1 to keep count/pct columns aligned.
+        local label_width = row.wide and 27 or 28
+        local fmt = string.format("    %%s %%-%ds %%8d  %%4d%%%%  %%s", label_width)
+        table.insert(lines, string.format(fmt, row.icon, row.label, row.value, pct, bar))
         -- Insert system submount entries immediately after system row, aligned
         if row.is_system and tags then
           local tag_rows = {}
@@ -143,7 +147,7 @@ function Extension.setup(opts)
               end
               local tbar_width = math.max(1, math.floor((trow.value / system_total) * 14 + 0.5))
               local tbar = string.rep("▰", tbar_width)
-              table.insert(lines, string.format("    ↳ %-28s %5d  %3d%%  %s", short_label, trow.value, tpct, tbar))
+              table.insert(lines, string.format("    ↳ %-28s %8d  %4d%%  %s", short_label, trow.value, tpct, tbar))
             end
           end
         end
@@ -151,7 +155,6 @@ function Extension.setup(opts)
     end
     return lines
   end
-
 
   --- @param tokens integer
   --- @param speed table|number
@@ -360,11 +363,10 @@ function Extension.setup(opts)
         if gen_tokens > 0 and wall_elapsed_s > 0 then
           local gen_label = snap.is_streaming and "streaming generation" or "generation"
           local gen_tps = gen_tokens / wall_elapsed_s
-          table.insert(lines, stat_line(
-            gen_tokens,
-            { elapsed_ms = wall_elapsed_s * 1000, tokens_per_sec = gen_tps },
-            gen_label
-          ))
+          table.insert(
+            lines,
+            stat_line(gen_tokens, { elapsed_ms = wall_elapsed_s * 1000, tokens_per_sec = gen_tps }, gen_label)
+          )
         end
         request_snapshots[bufnr] = nil
       end
@@ -406,11 +408,14 @@ function Extension.setup(opts)
         local gen_tokens = result.tokens - snap.tokens
         if gen_tokens > 0 and wall_elapsed_s > 0 then
           local partial_label = snap.is_streaming and "partial streaming" or "partial generation"
-          table.insert(lines, stat_line(
-            gen_tokens,
-            { elapsed_ms = wall_elapsed_s * 1000, tokens_per_sec = gen_tokens / wall_elapsed_s },
-            partial_label
-          ))
+          table.insert(
+            lines,
+            stat_line(
+              gen_tokens,
+              { elapsed_ms = wall_elapsed_s * 1000, tokens_per_sec = gen_tokens / wall_elapsed_s },
+              partial_label
+            )
+          )
         end
       end
       table.insert(lines, "-------------------------------")
@@ -479,7 +484,6 @@ function Extension.setup(opts)
               vim.log.levels.WARN
             )
           end
-
         end
       end)
     end,
@@ -546,13 +550,13 @@ function Extension.setup(opts)
       end
 
       table.insert(info_lines, "-------------------------------")
-      if display_mode == 'notification' then
+      if display_mode == "notification" then
         if notify_enabled then
           vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (inline)" })
         end
-      elseif display_mode == 'statusline' then
+      elseif display_mode == "statusline" then
         _G.tiktoken_statusline_message = table.concat(info_lines, " | ")
-        vim.cmd('redrawstatus')
+        vim.cmd("redrawstatus")
       end
     end,
   })
@@ -637,13 +641,13 @@ function Extension.setup(opts)
       end
 
       table.insert(info_lines, "-------------------------------")
-      if display_mode == 'notification' then
+      if display_mode == "notification" then
         if notify_enabled then
           vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (tools)" })
         end
-      elseif display_mode == 'statusline' then
+      elseif display_mode == "statusline" then
         _G.tiktoken_statusline_message = table.concat(info_lines, " | ")
-        vim.cmd('redrawstatus')
+        vim.cmd("redrawstatus")
       end
     end,
   })
