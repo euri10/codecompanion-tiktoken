@@ -8,6 +8,15 @@ local Extension = {}
 function Extension.setup(opts)
   local tiktoken = require("tiktoken")
 
+  --- Persistent notification history with toggleable floating window.
+  --- Configured from `opts.history_keymap` (default: "<leader>tt") and
+  --- `opts.history_max_entries` (default: 200).
+  local nh = require("codecompanion._extensions.tiktoken.notify_history")
+  nh.setup({
+    max_entries = (opts and opts.history_max_entries) or 200,
+    keymap      = (opts and opts.history_keymap ~= nil) and opts.history_keymap or "<leader>tt",
+  })
+
   --- Whether vim.notify notifications from this extension are enabled (legacy, for backward compatibility).
   --- Initialised from `opts.notify` (default: false).
   --- @type boolean
@@ -21,7 +30,7 @@ function Extension.setup(opts)
   --- Toggle tiktoken notifications and return the new state.
   local function toggle_notify()
     notify_enabled = not notify_enabled
-    vim.notify(
+    nh.notify(
       string.format("tiktoken notifications %s", notify_enabled and "enabled" or "disabled"),
       vim.log.levels.INFO
     )
@@ -42,7 +51,7 @@ function Extension.setup(opts)
 
   -- Verify Rust module loaded correctly.
   if not tiktoken.count_messages then
-    vim.notify("Error: tiktoken Rust module not loaded correctly", vim.log.levels.ERROR)
+    nh.notify("Error: tiktoken Rust module not loaded correctly", vim.log.levels.ERROR)
     return
   end
 
@@ -218,7 +227,7 @@ function Extension.setup(opts)
     end
     table.insert(lines, "-------------------------------")
     if notify_enabled then
-      vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
+      nh.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
     end
   end
 
@@ -372,7 +381,7 @@ function Extension.setup(opts)
       end
       table.insert(lines, "-------------------------------")
       if notify_enabled then
-        vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
+        nh.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown" })
       end
     end,
   })
@@ -420,7 +429,7 @@ function Extension.setup(opts)
       end
       table.insert(lines, "-------------------------------")
       if notify_enabled then
-        vim.notify(table.concat(lines, "\n"), vim.log.levels.WARN, { title = "Token Breakdown (stopped)" })
+        nh.notify(table.concat(lines, "\n"), vim.log.levels.WARN, { title = "Token Breakdown (stopped)" })
       end
     end,
   })
@@ -479,7 +488,7 @@ function Extension.setup(opts)
           -- Keep what the user sees consistent with what is sent to the LLM.
           data.for_user = data.for_llm
           if notify_enabled then
-            vim.notify(
+            nh.notify(
               string.format("Tool output from '%s' truncated (~%d tokens)", data.tool or "<tool>", max_tokens),
               vim.log.levels.WARN
             )
@@ -552,7 +561,7 @@ function Extension.setup(opts)
       table.insert(info_lines, "-------------------------------")
       if display_mode == "notification" then
         if notify_enabled then
-          vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (inline)" })
+          nh.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (inline)" })
         end
       elseif display_mode == "statusline" then
         _G.tiktoken_statusline_message = table.concat(info_lines, " | ")
@@ -643,7 +652,7 @@ function Extension.setup(opts)
       table.insert(info_lines, "-------------------------------")
       if display_mode == "notification" then
         if notify_enabled then
-          vim.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (tools)" })
+          nh.notify(table.concat(info_lines, "\n"), vim.log.levels.INFO, { title = "Token Breakdown (tools)" })
         end
       elseif display_mode == "statusline" then
         _G.tiktoken_statusline_message = table.concat(info_lines, " | ")
@@ -654,6 +663,10 @@ function Extension.setup(opts)
 
   -- Expose toggle_notify so callers can integrate it into their own keymaps.
   Extension.exports.toggle_notify = toggle_notify
+  -- Expose notify history controls.
+  Extension.exports.toggle_history_window = function() nh.toggle() end
+  Extension.exports.clear_history          = function() nh.clear() end
+  Extension.exports.get_history            = function() return nh.get_history() end
 end
 
 -- Extension.exports = {}
