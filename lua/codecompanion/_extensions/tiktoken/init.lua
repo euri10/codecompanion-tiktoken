@@ -12,17 +12,27 @@ function Extension.setup(opts)
   --- Toggle with `gtt` or `require("codecompanion").extensions.tiktoken.toggle_notify()`.
   --- Initialised from `opts.notify` (default: false).
   --- @type boolean
-  local notify_enabled = opts.notify ~= false
+  local notify_enabled = opts and opts.notify ~= false
+
+  --- Toggle tiktoken notifications and return the new state.
+  local function toggle_notify()
+    notify_enabled = not notify_enabled
+    vim.notify(
+      string.format("tiktoken notifications %s", notify_enabled and "enabled" or "disabled"),
+      vim.log.levels.INFO
+    )
+    return notify_enabled
+  end
+
   local count_tokens_action = {
     modes = {
       n = "gtt", -- Normal mode keymap: gtt = "get count tokens"
     },
     description = "Toggle tiktoken count notifications",
     callback = function(_chat)
-	    notify_enabled = not notify_enabled
+      toggle_notify()
     end,
   }
-  --- Toggle the notification flag and echo the new state.
   local chat_keymaps = require("codecompanion.config").interactions.chat.keymaps
   chat_keymaps.count_tokens = count_tokens_action
 
@@ -378,6 +388,56 @@ function Extension.setup(opts)
       request_snapshots[bufnr] = nil
       tools_cycle_snapshots[bufnr] = nil
       tiktoken_counts[bufnr] = nil
+    end,
+  })
+
+  -- ---------------------------------------------------------------------------
+  -- CodeCompanionChatCreated
+  -- Register per-chat callbacks (e.g. on_tool_output) so extensions can
+  -- truncate or transform tool output before it is added to the buffer.
+  -- ---------------------------------------------------------------------------
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionChatCreated",
+    callback = function(args)
+      local chat = require("codecompanion").buf_get_chat(args.data and args.data.bufnr)
+      if not chat then
+        return
+      end
+
+      -- Default behaviour: truncate tool output sent to the LLM if it would
+      -- exceed a configured token budget. This is opt-in via `opts.truncate_tool_output`
+      -- and configurable with `opts.max_tool_output_tokens` (default: 10000).
+      chat:add_callback("on_tool_output", function(c, data)
+        if not data or not data.for_llm then
+          return
+        end
+
+        local model_name = (c.adapter and c.adapter.model and c.adapter.model.name) or "cl100k_base"
+        local max_tokens = (opts and opts.max_tool_output_tokens) or 10000
+        local do_truncate = true
+        if opts and opts.truncate_tool_output == false then
+          do_truncate = false
+        end
+        if not do_truncate then
+          return
+        end
+
+        local token_count = tiktoken.count_text(data.for_llm, model_name)
+        if token_count > max_tokens then
+          -- Estimate a character limit proportional to the desired token ratio.
+          local ratio = max_tokens / token_count
+          local max_chars = math.floor(#data.for_llm * ratio)
+          data.for_llm = data.for_llm:sub(1, math.max(1, max_chars)) .. "\n\n[Output truncated]"
+          -- Keep what the user sees consistent with what is sent to the LLM.
+          data.for_user = data.for_llm
+          if notify_enabled then
+            vim.notify(
+              string.format("Tool output from '%s' truncated (~%d tokens)", data.tool or "<tool>", max_tokens),
+              vim.log.levels.WARN
+            )
+          end
+        end
+      end)
     end,
   })
 
