@@ -163,6 +163,13 @@ function Extension.setup(opts)
     if type(speed) == "table" then
       elapsed_s = (speed.elapsed_ms or 0) / 1000.0
       tps = speed.tokens_per_sec or 0
+    elseif type(speed) == "number" then
+      elapsed_s = speed / 1000.0
+      if elapsed_s > 0 then
+        tps = tokens / elapsed_s
+      else
+        tps = 0
+      end
     else
       elapsed_s = 0
       tps = 0
@@ -353,7 +360,11 @@ function Extension.setup(opts)
         if gen_tokens > 0 and wall_elapsed_s > 0 then
           local gen_label = snap.is_streaming and "streaming generation" or "generation"
           local gen_tps = gen_tokens / wall_elapsed_s
-          table.insert(lines, stat_line(gen_tokens, wall_elapsed_s, gen_tps, gen_label))
+          table.insert(lines, stat_line(
+            gen_tokens,
+            { elapsed_ms = wall_elapsed_s * 1000, tokens_per_sec = gen_tps },
+            gen_label
+          ))
         end
         request_snapshots[bufnr] = nil
       end
@@ -395,7 +406,11 @@ function Extension.setup(opts)
         local gen_tokens = result.tokens - snap.tokens
         if gen_tokens > 0 and wall_elapsed_s > 0 then
           local partial_label = snap.is_streaming and "partial streaming" or "partial generation"
-          table.insert(lines, stat_line(gen_tokens, wall_elapsed_s, gen_tokens / wall_elapsed_s, partial_label))
+          table.insert(lines, stat_line(
+            gen_tokens,
+            { elapsed_ms = wall_elapsed_s * 1000, tokens_per_sec = gen_tokens / wall_elapsed_s },
+            partial_label
+          ))
         end
       end
       table.insert(lines, "-------------------------------")
