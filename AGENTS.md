@@ -35,6 +35,15 @@ Priority order:
 - All code must be formatted: `cargo fmt --all -- --check`.
 - CI must fail on formatting, lint, test, or documentation errors.
 
+## CodeCompanion Message Compatibility Notes
+
+- Treat CodeCompanion chat message payloads as schema-flexible unless upstream types require a field.
+- Verify optionality against upstream `codecompanion.nvim` definitions before tightening Rust deserializers.
+- In upstream `lua/codecompanion/types.lua`, `CodeCompanion.Chat.ToolCall._index?` is optional, so Rust-side `ToolCall` parsing must tolerate missing `_index`.
+- Tool lifecycle events such as `CodeCompanionToolsStarted` and `CodeCompanionToolsFinished` may surface message shapes where `tools.calls[*]._index` is absent.
+- Other chat fields may also be omitted depending on call site or plugin version, including `_meta`, `opts`, `content`, `context`, and `tools` subfields.
+- When changing message structs in `src/lib.rs`, prefer additive compatibility and add regression coverage for both present and absent optional fields.
+
 ---
 
 ## Session Checklist
