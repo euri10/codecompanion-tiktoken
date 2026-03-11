@@ -85,8 +85,13 @@ pub struct ToolCallFunction {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ToolCall {
     /// 0-based index within the `calls` array.
+    ///
+    /// Some CodeCompanion call sites omit this field entirely, especially
+    /// during tool lifecycle autocommands. Token counting only needs the
+    /// function name and arguments, so deserialization must tolerate the field
+    /// being absent to preserve compatibility with those payloads.
     #[serde(rename = "_index")]
-    pub index: u32,
+    pub index: Option<u32>,
     pub function: ToolCallFunction,
     /// Opaque call ID used to correlate with the tool response message.
     pub id: String,
@@ -367,6 +372,13 @@ fn tiktoken(lua: &Lua) -> LuaResult<LuaTable> {
 mod tests {
     use super::*;
 
+    fn tokenizer_or_panic(model: &str) -> CoreBPE {
+        match tokenizer_for_model(model) {
+            Ok(bpe) => bpe,
+            Err(err) => panic!("failed to initialize tokenizer for {model}: {err}"),
+        }
+    }
+
     #[test]
     fn test_tokenizer_for_model_variants() {
         let models = [
@@ -379,7 +391,7 @@ mod tests {
             ("unknown", "cl100k_base"),
         ];
         for (model, _desc) in models {
-            let bpe = tokenizer_for_model(model).expect("tokenizer init should succeed in tests");
+            let bpe = tokenizer_or_panic(model);
             let tokens = bpe.encode_with_special_tokens("hello world");
             assert!(!tokens.is_empty(), "model {model} produced no tokens");
         }
@@ -387,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_count_text_simple() {
-        let bpe = tokenizer_for_model("cl100k_base").expect("cl100k_base must load");
+        let bpe = tokenizer_or_panic("cl100k_base");
         let tokens = bpe.encode_with_special_tokens("hello world");
         // "hello" and " world" each encode to one token with cl100k
         assert_eq!(tokens.len(), 2);
@@ -395,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_count_messages_simple() {
-        let bpe = tokenizer_for_model("cl100k_base").expect("cl100k_base must load");
+        let bpe = tokenizer_or_panic("cl100k_base");
         let (tokens_per_message, tokens_per_name) = model_constants("cl100k_base");
         let role = "user";
         let content = "hello";
@@ -428,7 +440,7 @@ mod tests {
     /// is in the right ballpark.
     #[test]
     fn test_count_messages_realistic_codecompanion_structure() {
-        let bpe = tokenizer_for_model("gpt-4o").expect("gpt-4o tokenizer must load");
+        let bpe = tokenizer_or_panic("gpt-4o");
         let (tokens_per_message, _tokens_per_name) = model_constants("gpt-4o");
 
         // Realistic message content strings (abbreviated where long).
@@ -506,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_count_messages_lua_structure() {
-        let bpe = tokenizer_for_model("gpt-4o").expect("gpt-4o tokenizer must load");
+        let bpe = tokenizer_or_panic("gpt-4o");
         let (tokens_per_message, _tokens_per_name) = model_constants("gpt-4o");
 
         // Build minimal Message values directly (no Lua runtime needed in unit tests).
@@ -546,14 +558,78 @@ mod tests {
     }
 
     /// Verify that the "gpt-4o" model (o200k_base) tokenises identically for
-    /// the fallback path — i.e. an unknown model name also uses cl100k and
-    /// produces a deterministic, stable count for a fixed input.
     #[test]
-    fn test_count_is_deterministic() {
-        let text = "The quick brown fox jumps over the lazy dog.";
-        let bpe = tokenizer_for_model("cl100k_base").expect("must load");
-        let first = bpe.encode_with_special_tokens(text).len();
-        let second = bpe.encode_with_special_tokens(text).len();
-        assert_eq!(first, second, "token count must be deterministic");
+    fn test_message_deserializes_tool_calls_without_index() {
+        let lua = Lua::new();
+        let message: Message = lua
+            .load(
+                r#"{
+                    role = "llm",
+                    content = nil,
+                    tools = {
+                        calls = {
+                            {
+                                id = "call_123",
+                                type = "function",
+                                ["function"] = {
+                                    name = "grep_search",
+                                    arguments = "{\"query\":\"foo\"}"
+                                }
+                            }
+                        }
+                    }
+                }"#,
+            )
+            .eval::<LuaValue>()
+            .and_then(|value| lua.from_value(value))
+            .unwrap_or_else(|err| panic!("failed to deserialize message without _index: {err}"));
+
+        assert_eq!(message.role, Role::Llm);
+        let tools = message
+            .tools
+            .unwrap_or_else(|| panic!("expected tools payload"));
+        let calls = tools.calls.unwrap_or_else(|| panic!("expected tool calls"));
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].index, None);
+        assert_eq!(calls[0].id, "call_123");
+        assert_eq!(calls[0].kind, "function");
+        assert_eq!(calls[0].function.name, "grep_search");
+        assert_eq!(calls[0].function.arguments, "{\"query\":\"foo\"}");
+    }
+
+    #[test]
+    fn test_message_deserializes_tool_calls_with_index() {
+        let lua = Lua::new();
+        let message: Message = lua
+            .load(
+                r#"{
+                    role = "llm",
+                    content = nil,
+                    tools = {
+                        calls = {
+                            {
+                                _index = 0,
+                                id = "call_456",
+                                type = "function",
+                                ["function"] = {
+                                    name = "read_file",
+                                    arguments = "{\"filepath\":\"/tmp/x\"}"
+                                }
+                            }
+                        }
+                    }
+                }"#,
+            )
+            .eval::<LuaValue>()
+            .and_then(|value| lua.from_value(value))
+            .unwrap_or_else(|err| panic!("failed to deserialize message with _index: {err}"));
+
+        let tools = message
+            .tools
+            .unwrap_or_else(|| panic!("expected tools payload"));
+        let calls = tools.calls.unwrap_or_else(|| panic!("expected tool calls"));
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].index, Some(0));
+        assert_eq!(calls[0].function.name, "read_file");
     }
 }
